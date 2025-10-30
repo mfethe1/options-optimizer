@@ -1,0 +1,38 @@
+{
+  "case_id": "healthcare_bearish",
+  "universe": "Healthcare",
+  "scenario": "Bearish",
+  "portfolio": {
+    "symbols": [
+      "JNJ",
+      "UNH",
+      "PFE",
+      "ABBV",
+      "TMO"
+    ],
+    "weights": [
+      0.25,
+      0.25,
+      0.2,
+      0.15,
+      0.15
+    ]
+  },
+  "market_regime": "bearish",
+  "expected_signals": {
+    "options_flow_composite": -0.6,
+    "residual_momentum": -0.5,
+    "seasonality_score": -0.4,
+    "breadth_liquidity": -0.55
+  },
+  "ground_truth": {
+    "regime": "bearish",
+    "risk_level": "high",
+    "recommendation": "reduce_exposure",
+    "key_risks": [
+      "regulatory",
+      "litigation",
+      "pricing_pressure"
+    ]
+  }
+}

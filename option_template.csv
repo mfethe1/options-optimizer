@@ -1,0 +1,3 @@
+symbol,option_type,strike,expiration_date,quantity,premium_paid,entry_date,target_price,target_profit_pct,stop_loss_pct,notes
+TSLA,call,250.00,2025-12-20,10,15.50,2025-10-01,25.00,50,30,Bullish on EV sector
+SPY,put,450.00,2025-11-15,5,8.25,2025-10-10,12.00,40,25,Hedge position

@@ -1,0 +1,38 @@
+{
+  "case_id": "finance_bearish",
+  "universe": "Finance",
+  "scenario": "Bearish",
+  "portfolio": {
+    "symbols": [
+      "JPM",
+      "BAC",
+      "WFC",
+      "GS",
+      "MS"
+    ],
+    "weights": [
+      0.25,
+      0.25,
+      0.2,
+      0.15,
+      0.15
+    ]
+  },
+  "market_regime": "bearish",
+  "expected_signals": {
+    "options_flow_composite": -0.7,
+    "residual_momentum": -0.6,
+    "seasonality_score": -0.5,
+    "breadth_liquidity": -0.65
+  },
+  "ground_truth": {
+    "regime": "bearish",
+    "risk_level": "high",
+    "recommendation": "reduce_exposure",
+    "key_risks": [
+      "recession",
+      "credit_losses",
+      "regulatory"
+    ]
+  }
+}

@@ -1,0 +1,155 @@
+# ============================================================================
+# SECRETS AND CREDENTIALS - NEVER COMMIT THESE
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.pfx
+*secret*
+*credentials*
+*api_key*
+
+# Chase credentials and session data
+chase_profile/
+*.zip
+
+# ============================================================================
+# PYTHON
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.pytype/
+cov.xml
+*.cover
+*.log
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ============================================================================
+# NODE / FRONTEND
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+.DS_Store
+*.local
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# ============================================================================
+# DATA AND CACHE
+# ============================================================================
+data/cache/
+data/research/
+data/opt/
+data/*.json
+*.csv
+!*_template.csv
+!eval_inputs/*.json
+!eval_outputs/*.json
+
+# ============================================================================
+# TESTING AND DEBUGGING
+# ============================================================================
+test_output/
+test_screenshots/
+screenshots/
+enhanced_swarm_test_output/
+*.html
+!frontend/index.html
+server_debug.log
+debug.csv
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!playwright.config.ts
+!eval_inputs/*.json
+!eval_outputs/*.json
+!eval_results/*.json
+
+# ============================================================================
+# IDE AND EDITORS
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.history/
+
+# ============================================================================
+# OS
+# ============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================================================
+# DOCKER
+# ============================================================================
+*.log
+
+# ============================================================================
+# PLAYWRIGHT
+# ============================================================================
+playwright-report/
+test-results/
+

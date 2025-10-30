@@ -1,0 +1,37 @@
+{
+  "case_id": "finance_neutral",
+  "universe": "Finance",
+  "scenario": "Neutral",
+  "portfolio": {
+    "symbols": [
+      "JPM",
+      "BAC",
+      "WFC",
+      "GS",
+      "MS"
+    ],
+    "weights": [
+      0.25,
+      0.25,
+      0.2,
+      0.15,
+      0.15
+    ]
+  },
+  "market_regime": "neutral",
+  "expected_signals": {
+    "options_flow_composite": 0.0,
+    "residual_momentum": 0.05,
+    "seasonality_score": 0.0,
+    "breadth_liquidity": 0.05
+  },
+  "ground_truth": {
+    "regime": "neutral",
+    "risk_level": "medium",
+    "recommendation": "maintain",
+    "key_risks": [
+      "rate_uncertainty",
+      "earnings_volatility"
+    ]
+  }
+}

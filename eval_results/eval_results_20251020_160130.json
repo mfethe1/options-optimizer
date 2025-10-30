@@ -1,0 +1,342 @@
+{
+  "timestamp": "2025-10-20T16:01:30.000410",
+  "total_cases": 10,
+  "passed": 10,
+  "failed": 0,
+  "pass_rate": 1.0,
+  "target_pass_rate": 0.95,
+  "met_target": true,
+  "average_score": 4.785,
+  "results": [
+    {
+      "case_id": "control_mixed",
+      "universe": "Mixed",
+      "scenario": "Control",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 176 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: neutral (expected: neutral)"
+      },
+      "signal_integration": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.8,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.989699"
+    },
+    {
+      "case_id": "finance_bearish",
+      "universe": "Finance",
+      "scenario": "Bearish",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 176 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: bearish (expected: bearish)"
+      },
+      "signal_integration": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.8,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.990700"
+    },
+    {
+      "case_id": "finance_bullish",
+      "universe": "Finance",
+      "scenario": "Bullish",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 181 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: bullish (expected: bullish)"
+      },
+      "signal_integration": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.8,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.992700"
+    },
+    {
+      "case_id": "finance_neutral",
+      "universe": "Finance",
+      "scenario": "Neutral",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 178 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: neutral (expected: neutral)"
+      },
+      "signal_integration": {
+        "score": 4.5,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.725,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.994291"
+    },
+    {
+      "case_id": "healthcare_bearish",
+      "universe": "Healthcare",
+      "scenario": "Bearish",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 179 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: bearish (expected: bearish)"
+      },
+      "signal_integration": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.8,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.995298"
+    },
+    {
+      "case_id": "healthcare_bullish",
+      "universe": "Healthcare",
+      "scenario": "Bullish",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 181 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: bullish (expected: bullish)"
+      },
+      "signal_integration": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.8,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.996411"
+    },
+    {
+      "case_id": "healthcare_neutral",
+      "universe": "Healthcare",
+      "scenario": "Neutral",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 181 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: neutral (expected: neutral)"
+      },
+      "signal_integration": {
+        "score": 4.75,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.7625,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.997409"
+    },
+    {
+      "case_id": "tech_bearish",
+      "universe": "Tech",
+      "scenario": "Bearish",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 173 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: bearish (expected: bearish)"
+      },
+      "signal_integration": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.8,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.998411"
+    },
+    {
+      "case_id": "tech_bullish",
+      "universe": "Tech",
+      "scenario": "Bullish",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 178 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: bullish (expected: bullish)"
+      },
+      "signal_integration": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.8,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:29.999411"
+    },
+    {
+      "case_id": "tech_neutral",
+      "universe": "Tech",
+      "scenario": "Neutral",
+      "schema_compliance": {
+        "score": 1,
+        "passed": true,
+        "errors": null
+      },
+      "narrative_quality": {
+        "score": 4.0,
+        "passed": true,
+        "details": "Narrative length: 175 chars"
+      },
+      "risk_assessment": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Regime: neutral (expected: neutral)"
+      },
+      "signal_integration": {
+        "score": 4.75,
+        "passed": true,
+        "details": "Signals integrated: ['options_flow_composite', 'residual_momentum', 'seasonality_score', 'breadth_liquidity']"
+      },
+      "recommendation_quality": {
+        "score": 5.0,
+        "passed": true,
+        "details": "Recommendations: 1"
+      },
+      "overall_score": 4.7625,
+      "passed": true,
+      "timestamp": "2025-10-20T16:01:30.000410"
+    }
+  ]
+}

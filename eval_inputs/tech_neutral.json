@@ -1,0 +1,37 @@
+{
+  "case_id": "tech_neutral",
+  "universe": "Tech",
+  "scenario": "Neutral",
+  "portfolio": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "GOOGL",
+      "NVDA",
+      "META"
+    ],
+    "weights": [
+      0.25,
+      0.25,
+      0.2,
+      0.15,
+      0.15
+    ]
+  },
+  "market_regime": "neutral",
+  "expected_signals": {
+    "options_flow_composite": 0.05,
+    "residual_momentum": 0.1,
+    "seasonality_score": 0.0,
+    "breadth_liquidity": 0.15
+  },
+  "ground_truth": {
+    "regime": "neutral",
+    "risk_level": "medium",
+    "recommendation": "maintain",
+    "key_risks": [
+      "uncertainty",
+      "range_bound"
+    ]
+  }
+}

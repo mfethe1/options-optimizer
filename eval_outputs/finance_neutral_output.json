@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "generated_at": "2025-10-20T16:01:29.992700",
+  "portfolio_summary": {
+    "total_value": 1000000,
+    "num_positions": 5,
+    "top_holdings": [
+      "JPM",
+      "BAC",
+      "WFC"
+    ]
+  },
+  "market_regime": {
+    "current_regime": "neutral",
+    "confidence": 0.85,
+    "regime_indicators": {
+      "volatility": "medium",
+      "trend": "neutral",
+      "breadth": "negative"
+    }
+  },
+  "risk_metrics": {
+    "portfolio_volatility": 0.15,
+    "sharpe_ratio": 1.2,
+    "max_drawdown": -0.12,
+    "var_95": -0.08
+  },
+  "phase4_signals": {
+    "options_flow_composite": 0.0,
+    "residual_momentum": 0.05,
+    "seasonality_score": 0.0,
+    "breadth_liquidity": 0.05
+  },
+  "narrative": "The portfolio is positioned for a neutral market regime with Finance sector exposure. Phase 4 signals indicate weak momentum. Options flow shows put buying. Risk level is medium.",
+  "recommendations": [
+    {
+      "action": "maintain",
+      "rationale": "Based on neutral regime and medium risk level",
+      "priority": "high"
+    }
+  ],
+  "key_risks": [
+    "rate_uncertainty",
+    "earnings_volatility"
+  ]
+}

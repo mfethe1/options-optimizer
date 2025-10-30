@@ -1,0 +1,37 @@
+{
+  "case_id": "healthcare_bullish",
+  "universe": "Healthcare",
+  "scenario": "Bullish",
+  "portfolio": {
+    "symbols": [
+      "JNJ",
+      "UNH",
+      "PFE",
+      "ABBV",
+      "TMO"
+    ],
+    "weights": [
+      0.25,
+      0.25,
+      0.2,
+      0.15,
+      0.15
+    ]
+  },
+  "market_regime": "bullish",
+  "expected_signals": {
+    "options_flow_composite": 0.7,
+    "residual_momentum": 0.6,
+    "seasonality_score": 0.5,
+    "breadth_liquidity": 0.65
+  },
+  "ground_truth": {
+    "regime": "bullish",
+    "risk_level": "low",
+    "recommendation": "maintain_or_increase",
+    "key_risks": [
+      "regulatory",
+      "patent_expiry"
+    ]
+  }
+}

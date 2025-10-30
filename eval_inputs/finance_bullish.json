@@ -1,0 +1,37 @@
+{
+  "case_id": "finance_bullish",
+  "universe": "Finance",
+  "scenario": "Bullish",
+  "portfolio": {
+    "symbols": [
+      "JPM",
+      "BAC",
+      "WFC",
+      "GS",
+      "MS"
+    ],
+    "weights": [
+      0.25,
+      0.25,
+      0.2,
+      0.15,
+      0.15
+    ]
+  },
+  "market_regime": "bullish",
+  "expected_signals": {
+    "options_flow_composite": 0.65,
+    "residual_momentum": 0.55,
+    "seasonality_score": 0.45,
+    "breadth_liquidity": 0.6
+  },
+  "ground_truth": {
+    "regime": "bullish",
+    "risk_level": "medium",
+    "recommendation": "maintain_or_increase",
+    "key_risks": [
+      "interest_rate",
+      "credit_quality"
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "case_id": "control_mixed",
+  "universe": "Mixed",
+  "scenario": "Control",
+  "portfolio": {
+    "symbols": [
+      "AAPL",
+      "JNJ",
+      "JPM",
+      "MSFT",
+      "UNH",
+      "BAC",
+      "GOOGL",
+      "PFE"
+    ],
+    "weights": [
+      0.15,
+      0.15,
+      0.15,
+      0.15,
+      0.1,
+      0.1,
+      0.1,
+      0.1
+    ]
+  },
+  "market_regime": "neutral",
+  "expected_signals": {
+    "options_flow_composite": 0.15,
+    "residual_momentum": 0.1,
+    "seasonality_score": 0.05,
+    "breadth_liquidity": 0.2
+  },
+  "ground_truth": {
+    "regime": "neutral",
+    "risk_level": "medium",
+    "recommendation": "maintain",
+    "key_risks": [
+      "diversification",
+      "sector_rotation"
+    ]
+  }
+}

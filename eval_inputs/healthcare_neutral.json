@@ -1,0 +1,37 @@
+{
+  "case_id": "healthcare_neutral",
+  "universe": "Healthcare",
+  "scenario": "Neutral",
+  "portfolio": {
+    "symbols": [
+      "JNJ",
+      "UNH",
+      "PFE",
+      "ABBV",
+      "TMO"
+    ],
+    "weights": [
+      0.25,
+      0.25,
+      0.2,
+      0.15,
+      0.15
+    ]
+  },
+  "market_regime": "neutral",
+  "expected_signals": {
+    "options_flow_composite": 0.1,
+    "residual_momentum": 0.05,
+    "seasonality_score": 0.0,
+    "breadth_liquidity": 0.1
+  },
+  "ground_truth": {
+    "regime": "neutral",
+    "risk_level": "medium",
+    "recommendation": "maintain",
+    "key_risks": [
+      "policy_uncertainty",
+      "competitive_pressure"
+    ]
+  }
+}

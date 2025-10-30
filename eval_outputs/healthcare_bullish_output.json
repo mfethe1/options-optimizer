@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "generated_at": "2025-10-20T16:01:29.995298",
+  "portfolio_summary": {
+    "total_value": 1000000,
+    "num_positions": 5,
+    "top_holdings": [
+      "JNJ",
+      "UNH",
+      "PFE"
+    ]
+  },
+  "market_regime": {
+    "current_regime": "bullish",
+    "confidence": 0.85,
+    "regime_indicators": {
+      "volatility": "medium",
+      "trend": "bullish",
+      "breadth": "positive"
+    }
+  },
+  "risk_metrics": {
+    "portfolio_volatility": 0.15,
+    "sharpe_ratio": 1.2,
+    "max_drawdown": -0.12,
+    "var_95": -0.08
+  },
+  "phase4_signals": {
+    "options_flow_composite": 0.7,
+    "residual_momentum": 0.6,
+    "seasonality_score": 0.5,
+    "breadth_liquidity": 0.65
+  },
+  "narrative": "The portfolio is positioned for a bullish market regime with Healthcare sector exposure. Phase 4 signals indicate strong momentum. Options flow shows call buying. Risk level is low.",
+  "recommendations": [
+    {
+      "action": "maintain_or_increase",
+      "rationale": "Based on bullish regime and low risk level",
+      "priority": "high"
+    }
+  ],
+  "key_risks": [
+    "regulatory",
+    "patent_expiry"
+  ]
+}

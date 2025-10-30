@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "generated_at": "2025-10-20T16:01:29.994291",
+  "portfolio_summary": {
+    "total_value": 1000000,
+    "num_positions": 5,
+    "top_holdings": [
+      "JNJ",
+      "UNH",
+      "PFE"
+    ]
+  },
+  "market_regime": {
+    "current_regime": "bearish",
+    "confidence": 0.85,
+    "regime_indicators": {
+      "volatility": "medium",
+      "trend": "bearish",
+      "breadth": "negative"
+    }
+  },
+  "risk_metrics": {
+    "portfolio_volatility": 0.15,
+    "sharpe_ratio": 1.2,
+    "max_drawdown": -0.12,
+    "var_95": -0.08
+  },
+  "phase4_signals": {
+    "options_flow_composite": -0.6,
+    "residual_momentum": -0.5,
+    "seasonality_score": -0.4,
+    "breadth_liquidity": -0.55
+  },
+  "narrative": "The portfolio is positioned for a bearish market regime with Healthcare sector exposure. Phase 4 signals indicate weak momentum. Options flow shows put buying. Risk level is high.",
+  "recommendations": [
+    {
+      "action": "reduce_exposure",
+      "rationale": "Based on bearish regime and high risk level",
+      "priority": "high"
+    }
+  ],
+  "key_risks": [
+    "regulatory",
+    "litigation",
+    "pricing_pressure"
+  ]
+}
