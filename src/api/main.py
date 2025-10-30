@@ -140,6 +140,46 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Phase 4 WebSocket routes: {e}")
 
+# Include Conversational Trading routes (Natural language interface)
+try:
+    from .conversational_routes import router as conversational_router
+    app.include_router(conversational_router)
+    logger.info("Conversational Trading routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Conversational Trading routes: {e}")
+
+# Include Vision Analysis routes (Chart image analysis)
+try:
+    from .vision_routes import router as vision_router
+    app.include_router(vision_router)
+    logger.info("Vision Analysis routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Vision Analysis routes: {e}")
+
+# Include Anomaly Detection routes (Real-time alerts)
+try:
+    from .anomaly_routes import router as anomaly_router
+    app.include_router(anomaly_router)
+    logger.info("Anomaly Detection routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Anomaly Detection routes: {e}")
+
+# Include Sentiment Analysis routes (Deep sentiment with influencer weighting)
+try:
+    from .sentiment_routes import router as sentiment_router
+    app.include_router(sentiment_router)
+    logger.info("Sentiment Analysis routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Sentiment Analysis routes: {e}")
+
+# Include Paper Trading routes (AI-powered autonomous trading)
+try:
+    from .paper_trading_routes import router as paper_trading_router
+    app.include_router(paper_trading_router)
+    logger.info("Paper Trading routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Paper Trading routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -176,13 +216,29 @@ async def root():
         "status": "ok",
         "service": "investor-report",
         "version": __version__,
-        "description": "Renaissance-level options analytics with institutional-grade metrics",
+        "description": "World-class options analytics with AI-powered trading agents",
+        "competitive_advantages": [
+            "Natural language trading interface",
+            "AI-powered chart image analysis",
+            "Real-time anomaly detection",
+            "Deep sentiment with influencer weighting",
+            "Autonomous paper trading with multi-agent consensus"
+        ],
         "endpoints": {
             "health": "/health",
-            "investor_report": "/api/investor-report",
-            "phase4_stream": "/ws/phase4-metrics/{user_id}",
+            "docs": "/docs",
             "metrics": "/metrics",
-            "docs": "/docs"
+            "investor_report": "/api/investor-report",
+            "conversational_trading": "/api/conversation/message",
+            "chart_analysis": "/api/vision/analyze-chart",
+            "anomaly_detection": "/api/anomalies/detect",
+            "sentiment_analysis": "/api/sentiment/analyze",
+            "paper_trading": "/api/paper-trading/execute",
+            "websockets": {
+                "agent_stream": "/ws/agent-stream/{user_id}",
+                "anomaly_alerts": "/api/anomalies/ws/alerts/{user_id}",
+                "phase4_metrics": "/ws/phase4-metrics/{user_id}"
+            }
         }
     }
 
