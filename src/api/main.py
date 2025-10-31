@@ -196,6 +196,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Risk Dashboard routes: {e}")
 
+# Include News routes (Bloomberg NEWS equivalent)
+try:
+    from .news_routes import router as news_router
+    app.include_router(news_router)
+    logger.info("News routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register News routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -252,8 +260,12 @@ async def root():
             "paper_trading": "/api/paper-trading/execute",
             "options_chain": "/api/options-chain/{symbol}",
             "risk_dashboard": "/api/risk-dashboard/{user_id}",
+            "news": "/api/news",
+            "news_search": "/api/news/search",
+            "news_by_symbol": "/api/news/symbols/{symbol}",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
+                "news_stream": "/api/news/ws/stream",
                 "anomaly_alerts": "/api/anomalies/ws/alerts/{user_id}",
                 "phase4_metrics": "/ws/phase4-metrics/{user_id}"
             }
