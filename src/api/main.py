@@ -204,6 +204,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register News routes: {e}")
 
+# Include Options Analytics routes (IV surface, skew, term structure)
+try:
+    from .options_analytics_routes import router as options_analytics_router
+    app.include_router(options_analytics_router)
+    logger.info("Options Analytics routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Options Analytics routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
