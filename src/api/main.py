@@ -180,6 +180,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Paper Trading routes: {e}")
 
+# Include Options Chain routes (Bloomberg OMON equivalent)
+try:
+    from .options_chain_routes import router as options_chain_router
+    app.include_router(options_chain_router)
+    logger.info("Options Chain routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Options Chain routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
