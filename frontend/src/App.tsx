@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
 import PositionsPage from './pages/PositionsPage';
@@ -14,14 +15,79 @@ import PaperTradingPage from './pages/PaperTradingPage';
 import OptionsChainPage from './pages/OptionsChainPage';
 import RiskDashboardPage from './pages/RiskDashboardPage';
 import NewsFeedPage from './pages/NewsFeedPage';
+import CommandPalette from './components/CommandPalette';
 
-function App() {
+function AppContent() {
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Command Palette (Ctrl+K or Cmd+K)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+
+      // Navigation shortcuts (only when command palette is closed)
+      if (!commandPaletteOpen && (e.ctrlKey || e.metaKey)) {
+        switch (e.key.toLowerCase()) {
+          case 'd':
+            e.preventDefault();
+            navigate('/');
+            break;
+          case 'o':
+            e.preventDefault();
+            navigate('/options-chain');
+            break;
+          case 'r':
+            e.preventDefault();
+            navigate('/risk-dashboard');
+            break;
+          case 'n':
+            e.preventDefault();
+            navigate('/news');
+            break;
+          case 'c':
+            e.preventDefault();
+            navigate('/chart-analysis');
+            break;
+          case 's':
+            e.preventDefault();
+            navigate('/sentiment');
+            break;
+          case 'a':
+            e.preventDefault();
+            navigate('/anomalies');
+            break;
+          case 't':
+            e.preventDefault();
+            navigate('/paper-trading');
+            break;
+          case 'p':
+            e.preventDefault();
+            navigate('/positions');
+            break;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [commandPaletteOpen, navigate]);
+
   return (
-    <Router>
       <div className="min-h-screen bg-gray-50">
+        {/* Command Palette */}
+        <CommandPalette
+          isOpen={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+        />
+
         <nav className="bg-white shadow-sm">
           <div className="container mx-auto px-4 py-4">
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-4 items-center justify-between">
+              <div className="flex flex-wrap gap-4">
               <a href="/" className="text-blue-600 hover:text-blue-800 font-medium">Dashboard</a>
               <a href="/positions" className="text-blue-600 hover:text-blue-800">Positions</a>
 
@@ -44,6 +110,17 @@ function App() {
                 <a href="/risk-panel-demo" className="text-blue-600 hover:text-blue-800">Risk Panel</a>
                 <a href="/agent-transparency" className="text-blue-600 hover:text-blue-800">Transparency</a>
               </div>
+              </div>
+
+              {/* Command Palette Button */}
+              <button
+                onClick={() => setCommandPaletteOpen(true)}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                title="Command Palette (Ctrl+K)"
+              >
+                <span>⌘</span>
+                <span>K</span>
+              </button>
             </div>
           </div>
         </nav>
@@ -83,6 +160,13 @@ function App() {
           }}
         />
       </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }
