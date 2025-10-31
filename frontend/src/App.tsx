@@ -12,6 +12,7 @@ import AnomalyDetectionPage from './pages/AnomalyDetectionPage';
 import SentimentAnalysisPage from './pages/SentimentAnalysisPage';
 import PaperTradingPage from './pages/PaperTradingPage';
 import OptionsChainPage from './pages/OptionsChainPage';
+import RiskDashboardPage from './pages/RiskDashboardPage';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
               {/* New Features */}
               <div className="flex gap-4 border-l border-gray-300 pl-4">
                 <a href="/options-chain" className="text-green-600 hover:text-green-800 font-medium">⚡ Options Chain</a>
+                <a href="/risk-dashboard" className="text-green-600 hover:text-green-800 font-medium">🛡️ Risk Dashboard</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
                 <a href="/anomalies" className="text-green-600 hover:text-green-800 font-medium">🚨 Anomalies</a>
@@ -51,6 +53,7 @@ function App() {
 
             {/* New Feature Routes */}
             <Route path="/options-chain" element={<OptionsChainPage />} />
+            <Route path="/risk-dashboard" element={<RiskDashboardPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
             <Route path="/anomalies" element={<AnomalyDetectionPage />} />

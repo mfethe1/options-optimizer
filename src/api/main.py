@@ -188,6 +188,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Options Chain routes: {e}")
 
+# Include Risk Dashboard routes (Bloomberg PORT equivalent)
+try:
+    from .risk_dashboard_routes import router as risk_dashboard_router
+    app.include_router(risk_dashboard_router)
+    logger.info("Risk Dashboard routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Risk Dashboard routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -242,6 +250,8 @@ async def root():
             "anomaly_detection": "/api/anomalies/detect",
             "sentiment_analysis": "/api/sentiment/analyze",
             "paper_trading": "/api/paper-trading/execute",
+            "options_chain": "/api/options-chain/{symbol}",
+            "risk_dashboard": "/api/risk-dashboard/{user_id}",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "anomaly_alerts": "/api/anomalies/ws/alerts/{user_id}",
