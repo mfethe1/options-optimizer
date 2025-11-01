@@ -20,6 +20,8 @@ import EconomicCalendarPage from './pages/EconomicCalendarPage';
 import BacktestPage from './pages/BacktestPage';
 import ExecutionQualityPage from './pages/ExecutionQualityPage';
 import CustomDashboardPage from './pages/CustomDashboardPage';
+import SchwabConnectionPage from './pages/SchwabConnectionPage';
+import SchwabTradingPage from './pages/SchwabTradingPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -93,6 +95,14 @@ function AppContent() {
             e.preventDefault();
             navigate('/custom-dashboard');
             break;
+          case 'l':
+            e.preventDefault();
+            navigate('/schwab-connection');
+            break;
+          case 'u':
+            e.preventDefault();
+            navigate('/schwab-trading');
+            break;
         }
       }
     };
@@ -125,6 +135,8 @@ function AppContent() {
                 <a href="/calendar" className="text-green-600 hover:text-green-800 font-medium">📅 Calendar</a>
                 <a href="/backtest" className="text-green-600 hover:text-green-800 font-medium">📊 Backtest</a>
                 <a href="/execution" className="text-green-600 hover:text-green-800 font-medium">🎯 Execution</a>
+                <a href="/schwab-connection" className="text-purple-600 hover:text-purple-800 font-bold">🔗 Schwab</a>
+                <a href="/schwab-trading" className="text-purple-600 hover:text-purple-800 font-bold">💰 Trade</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -168,6 +180,8 @@ function AppContent() {
             <Route path="/calendar" element={<EconomicCalendarPage />} />
             <Route path="/backtest" element={<BacktestPage />} />
             <Route path="/execution" element={<ExecutionQualityPage />} />
+            <Route path="/schwab-connection" element={<SchwabConnectionPage />} />
+            <Route path="/schwab-trading" element={<SchwabTradingPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
