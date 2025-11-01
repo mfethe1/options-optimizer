@@ -212,6 +212,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Options Analytics routes: {e}")
 
+# Include Calendar routes (Bloomberg EVTS equivalent - Earnings & Economic Events)
+try:
+    from .calendar_routes import router as calendar_router
+    app.include_router(calendar_router)
+    logger.info("Calendar routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Calendar routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -267,10 +275,15 @@ async def root():
             "sentiment_analysis": "/api/sentiment/analyze",
             "paper_trading": "/api/paper-trading/execute",
             "options_chain": "/api/options-chain/{symbol}",
+            "options_analytics": "/api/options-analytics/{symbol}/complete",
             "risk_dashboard": "/api/risk-dashboard/{user_id}",
             "news": "/api/news",
             "news_search": "/api/news/search",
             "news_by_symbol": "/api/news/symbols/{symbol}",
+            "calendar_earnings": "/api/calendar/earnings",
+            "calendar_economic": "/api/calendar/economic",
+            "calendar_complete": "/api/calendar/complete",
+            "calendar_upcoming": "/api/calendar/upcoming-week",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",

@@ -16,6 +16,7 @@ import OptionsChainPage from './pages/OptionsChainPage';
 import RiskDashboardPage from './pages/RiskDashboardPage';
 import NewsFeedPage from './pages/NewsFeedPage';
 import OptionsAnalyticsPage from './pages/OptionsAnalyticsPage';
+import EconomicCalendarPage from './pages/EconomicCalendarPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -73,6 +74,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/options-analytics');
             break;
+          case 'e':
+            e.preventDefault();
+            navigate('/calendar');
+            break;
         }
       }
     };
@@ -101,6 +106,7 @@ function AppContent() {
                 <a href="/options-chain" className="text-green-600 hover:text-green-800 font-medium">⚡ Options Chain</a>
                 <a href="/options-analytics" className="text-green-600 hover:text-green-800 font-medium">📉 Analytics</a>
                 <a href="/risk-dashboard" className="text-green-600 hover:text-green-800 font-medium">🛡️ Risk Dashboard</a>
+                <a href="/calendar" className="text-green-600 hover:text-green-800 font-medium">📅 Calendar</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -140,6 +146,7 @@ function AppContent() {
             <Route path="/options-chain" element={<OptionsChainPage />} />
             <Route path="/options-analytics" element={<OptionsAnalyticsPage />} />
             <Route path="/risk-dashboard" element={<RiskDashboardPage />} />
+            <Route path="/calendar" element={<EconomicCalendarPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
