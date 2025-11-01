@@ -236,6 +236,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Execution Quality routes: {e}")
 
+# Include Schwab API routes (Live trading integration)
+try:
+    from .schwab_routes import router as schwab_router
+    app.include_router(schwab_router)
+    logger.info("Schwab API routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Schwab API routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -306,6 +314,15 @@ async def root():
             "execution_analysis": "/api/execution/analysis",
             "execution_record_order": "/api/execution/record-order",
             "execution_record_fill": "/api/execution/record-fill",
+            "schwab_auth_url": "/api/schwab/auth/url",
+            "schwab_auth_token": "/api/schwab/auth/token",
+            "schwab_accounts": "/api/schwab/accounts",
+            "schwab_positions": "/api/schwab/accounts/{account_id}/positions",
+            "schwab_quote": "/api/schwab/quote/{symbol}",
+            "schwab_options": "/api/schwab/options/{symbol}",
+            "schwab_place_order": "/api/schwab/accounts/{account_id}/orders",
+            "schwab_cancel_order": "/api/schwab/accounts/{account_id}/orders/{order_id}",
+            "schwab_order_status": "/api/schwab/accounts/{account_id}/orders/{order_id}",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",
