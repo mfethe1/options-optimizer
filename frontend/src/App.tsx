@@ -19,6 +19,7 @@ import OptionsAnalyticsPage from './pages/OptionsAnalyticsPage';
 import EconomicCalendarPage from './pages/EconomicCalendarPage';
 import BacktestPage from './pages/BacktestPage';
 import ExecutionQualityPage from './pages/ExecutionQualityPage';
+import CustomDashboardPage from './pages/CustomDashboardPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -88,6 +89,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/execution');
             break;
+          case 'w':
+            e.preventDefault();
+            navigate('/custom-dashboard');
+            break;
         }
       }
     };
@@ -113,6 +118,7 @@ function AppContent() {
 
               {/* New Features */}
               <div className="flex gap-4 border-l border-gray-300 pl-4">
+                <a href="/custom-dashboard" className="text-green-600 hover:text-green-800 font-medium">📊 Dashboard</a>
                 <a href="/options-chain" className="text-green-600 hover:text-green-800 font-medium">⚡ Options Chain</a>
                 <a href="/options-analytics" className="text-green-600 hover:text-green-800 font-medium">📉 Analytics</a>
                 <a href="/risk-dashboard" className="text-green-600 hover:text-green-800 font-medium">🛡️ Risk Dashboard</a>
@@ -155,6 +161,7 @@ function AppContent() {
             <Route path="/positions" element={<PositionsPage />} />
 
             {/* New Feature Routes */}
+            <Route path="/custom-dashboard" element={<CustomDashboardPage />} />
             <Route path="/options-chain" element={<OptionsChainPage />} />
             <Route path="/options-analytics" element={<OptionsAnalyticsPage />} />
             <Route path="/risk-dashboard" element={<RiskDashboardPage />} />

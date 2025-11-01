@@ -33,6 +33,14 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       shortcut: 'Ctrl+D'
     },
     {
+      id: 'nav-custom-dashboard',
+      name: 'Custom Dashboard',
+      description: 'Personalized widget dashboard',
+      action: () => navigate('/custom-dashboard'),
+      keywords: ['custom', 'dashboard', 'widgets', 'personalize'],
+      shortcut: 'Ctrl+W'
+    },
+    {
       id: 'nav-options-chain',
       name: 'Options Chain',
       description: 'View real-time options chain',
@@ -161,7 +169,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       id: 'action-help',
       name: 'Help',
       description: 'Show help and keyboard shortcuts',
-      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+O - Options Chain\nCtrl+V - Options Analytics\nCtrl+R - Risk Dashboard\nCtrl+E - Economic Calendar\nCtrl+B - Backtest\nCtrl+X - Execution Quality\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
+      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+W - Custom Dashboard\nCtrl+O - Options Chain\nCtrl+V - Options Analytics\nCtrl+R - Risk Dashboard\nCtrl+E - Economic Calendar\nCtrl+B - Backtest\nCtrl+X - Execution Quality\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
       keywords: ['help', 'shortcuts', 'keyboard', 'commands'],
       shortcut: '?'
     }
