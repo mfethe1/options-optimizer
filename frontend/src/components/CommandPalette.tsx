@@ -41,6 +41,14 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       shortcut: 'Ctrl+O'
     },
     {
+      id: 'nav-options-analytics',
+      name: 'Options Analytics',
+      description: 'IV surface, skew, term structure',
+      action: () => navigate('/options-analytics'),
+      keywords: ['options', 'analytics', 'volatility', 'iv', 'skew', 'term structure', 'surface'],
+      shortcut: 'Ctrl+V'
+    },
+    {
       id: 'nav-risk-dashboard',
       name: 'Risk Dashboard',
       description: 'View portfolio risk metrics',
@@ -129,7 +137,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       id: 'action-help',
       name: 'Help',
       description: 'Show help and keyboard shortcuts',
-      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+O - Options Chain\nCtrl+R - Risk Dashboard\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
+      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+O - Options Chain\nCtrl+V - Options Analytics\nCtrl+R - Risk Dashboard\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
       keywords: ['help', 'shortcuts', 'keyboard', 'commands'],
       shortcut: '?'
     }

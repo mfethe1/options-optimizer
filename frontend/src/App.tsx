@@ -15,6 +15,7 @@ import PaperTradingPage from './pages/PaperTradingPage';
 import OptionsChainPage from './pages/OptionsChainPage';
 import RiskDashboardPage from './pages/RiskDashboardPage';
 import NewsFeedPage from './pages/NewsFeedPage';
+import OptionsAnalyticsPage from './pages/OptionsAnalyticsPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -68,6 +69,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/positions');
             break;
+          case 'v':
+            e.preventDefault();
+            navigate('/options-analytics');
+            break;
         }
       }
     };
@@ -94,6 +99,7 @@ function AppContent() {
               {/* New Features */}
               <div className="flex gap-4 border-l border-gray-300 pl-4">
                 <a href="/options-chain" className="text-green-600 hover:text-green-800 font-medium">⚡ Options Chain</a>
+                <a href="/options-analytics" className="text-green-600 hover:text-green-800 font-medium">📉 Analytics</a>
                 <a href="/risk-dashboard" className="text-green-600 hover:text-green-800 font-medium">🛡️ Risk Dashboard</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
@@ -132,6 +138,7 @@ function AppContent() {
 
             {/* New Feature Routes */}
             <Route path="/options-chain" element={<OptionsChainPage />} />
+            <Route path="/options-analytics" element={<OptionsAnalyticsPage />} />
             <Route path="/risk-dashboard" element={<RiskDashboardPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
