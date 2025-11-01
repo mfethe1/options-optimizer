@@ -228,6 +228,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Backtest routes: {e}")
 
+# Include Execution Quality routes (Fill quality and slippage tracking)
+try:
+    from .execution_routes import router as execution_router
+    app.include_router(execution_router)
+    logger.info("Execution Quality routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Execution Quality routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -295,6 +303,9 @@ async def root():
             "backtest_run": "/api/backtest/run",
             "backtest_strategies": "/api/backtest/strategies",
             "backtest_compare": "/api/backtest/compare",
+            "execution_analysis": "/api/execution/analysis",
+            "execution_record_order": "/api/execution/record-order",
+            "execution_record_fill": "/api/execution/record-fill",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",

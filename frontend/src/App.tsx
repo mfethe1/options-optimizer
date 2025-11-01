@@ -18,6 +18,7 @@ import NewsFeedPage from './pages/NewsFeedPage';
 import OptionsAnalyticsPage from './pages/OptionsAnalyticsPage';
 import EconomicCalendarPage from './pages/EconomicCalendarPage';
 import BacktestPage from './pages/BacktestPage';
+import ExecutionQualityPage from './pages/ExecutionQualityPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -83,6 +84,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/backtest');
             break;
+          case 'x':
+            e.preventDefault();
+            navigate('/execution');
+            break;
         }
       }
     };
@@ -113,6 +118,7 @@ function AppContent() {
                 <a href="/risk-dashboard" className="text-green-600 hover:text-green-800 font-medium">🛡️ Risk Dashboard</a>
                 <a href="/calendar" className="text-green-600 hover:text-green-800 font-medium">📅 Calendar</a>
                 <a href="/backtest" className="text-green-600 hover:text-green-800 font-medium">📊 Backtest</a>
+                <a href="/execution" className="text-green-600 hover:text-green-800 font-medium">🎯 Execution</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -154,6 +160,7 @@ function AppContent() {
             <Route path="/risk-dashboard" element={<RiskDashboardPage />} />
             <Route path="/calendar" element={<EconomicCalendarPage />} />
             <Route path="/backtest" element={<BacktestPage />} />
+            <Route path="/execution" element={<ExecutionQualityPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
