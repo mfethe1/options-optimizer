@@ -65,6 +65,14 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       shortcut: 'Ctrl+E'
     },
     {
+      id: 'nav-backtest',
+      name: 'Strategy Backtesting',
+      description: 'Test historical strategy performance',
+      action: () => navigate('/backtest'),
+      keywords: ['backtest', 'test', 'strategy', 'historical', 'performance', 'metrics'],
+      shortcut: 'Ctrl+B'
+    },
+    {
       id: 'nav-news',
       name: 'News Feed',
       description: 'View financial news',
@@ -145,7 +153,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       id: 'action-help',
       name: 'Help',
       description: 'Show help and keyboard shortcuts',
-      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+O - Options Chain\nCtrl+V - Options Analytics\nCtrl+R - Risk Dashboard\nCtrl+E - Economic Calendar\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
+      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+O - Options Chain\nCtrl+V - Options Analytics\nCtrl+R - Risk Dashboard\nCtrl+E - Economic Calendar\nCtrl+B - Backtest\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
       keywords: ['help', 'shortcuts', 'keyboard', 'commands'],
       shortcut: '?'
     }

@@ -220,6 +220,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Calendar routes: {e}")
 
+# Include Backtest routes (Historical strategy testing)
+try:
+    from .backtest_routes import router as backtest_router
+    app.include_router(backtest_router)
+    logger.info("Backtest routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Backtest routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -284,6 +292,9 @@ async def root():
             "calendar_economic": "/api/calendar/economic",
             "calendar_complete": "/api/calendar/complete",
             "calendar_upcoming": "/api/calendar/upcoming-week",
+            "backtest_run": "/api/backtest/run",
+            "backtest_strategies": "/api/backtest/strategies",
+            "backtest_compare": "/api/backtest/compare",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",
