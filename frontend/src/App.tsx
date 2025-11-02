@@ -24,6 +24,7 @@ import SchwabConnectionPage from './pages/SchwabConnectionPage';
 import SchwabTradingPage from './pages/SchwabTradingPage';
 import MultiMonitorPage from './pages/MultiMonitorPage';
 import AIRecommendationsPage from './pages/AIRecommendationsPage';
+import RealTimeQuotePage from './pages/RealTimeQuotePage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -113,6 +114,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/ai-recommendations');
             break;
+          case 'q':
+            e.preventDefault();
+            navigate('/market-data');
+            break;
         }
       }
     };
@@ -149,6 +154,7 @@ function AppContent() {
                 <a href="/schwab-trading" className="text-purple-600 hover:text-purple-800 font-bold">💰 Trade</a>
                 <a href="/multi-monitor" className="text-indigo-600 hover:text-indigo-800 font-bold">🖥️ Multi-Monitor</a>
                 <a href="/ai-recommendations" className="text-pink-600 hover:text-pink-800 font-bold">🤖 AI Insights</a>
+                <a href="/market-data" className="text-orange-600 hover:text-orange-800 font-bold">⚡ Live Data</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -196,6 +202,7 @@ function AppContent() {
             <Route path="/schwab-trading" element={<SchwabTradingPage />} />
             <Route path="/multi-monitor" element={<MultiMonitorPage />} />
             <Route path="/ai-recommendations" element={<AIRecommendationsPage />} />
+            <Route path="/market-data" element={<RealTimeQuotePage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />

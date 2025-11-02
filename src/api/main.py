@@ -10,6 +10,7 @@ import logging
 import time
 from datetime import datetime, date
 import asyncio
+import os
 
 from .models import (
     Position, PositionCreate, PositionUpdate,
@@ -79,20 +80,64 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Startup and shutdown events for agent stream manager
+# Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():
-    """Start background tasks on application startup"""
+    """Start background tasks and services on application startup"""
     logger.info("Starting agent stream heartbeat task...")
     await agent_stream_manager.start_heartbeat()
     logger.info("Agent stream manager initialized")
 
+    # Initialize institutional data aggregator
+    try:
+        from .market_data_routes import initialize_data_aggregator
+
+        # Load API keys from environment
+        api_keys = {}
+
+        # Polygon.io
+        if os.getenv("POLYGON_API_KEY"):
+            api_keys["polygon"] = os.getenv("POLYGON_API_KEY")
+            logger.info("Polygon API key loaded")
+
+        # Alpaca
+        if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
+            api_keys["alpaca_key"] = os.getenv("ALPACA_API_KEY")
+            api_keys["alpaca_secret"] = os.getenv("ALPACA_SECRET_KEY")
+            logger.info("Alpaca API credentials loaded")
+
+        # Finnhub
+        if os.getenv("FINNHUB_API_KEY"):
+            api_keys["finnhub"] = os.getenv("FINNHUB_API_KEY")
+            logger.info("Finnhub API key loaded")
+
+        # IEX Cloud
+        if os.getenv("IEX_CLOUD_API_KEY"):
+            api_keys["iex_cloud"] = os.getenv("IEX_CLOUD_API_KEY")
+            logger.info("IEX Cloud API key loaded")
+
+        if api_keys:
+            await initialize_data_aggregator(api_keys)
+            logger.info(f"Institutional data aggregator initialized with {len(api_keys)} providers")
+        else:
+            logger.warning("No market data API keys found - data aggregator not initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize data aggregator: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop background tasks on application shutdown"""
+    """Stop background tasks and services on application shutdown"""
     logger.info("Stopping agent stream heartbeat task...")
     await agent_stream_manager.stop_heartbeat()
     logger.info("Agent stream manager shut down")
+
+    # Shutdown institutional data aggregator
+    try:
+        from .market_data_routes import shutdown_data_aggregator
+        await shutdown_data_aggregator()
+        logger.info("Institutional data aggregator shut down")
+    except Exception as e:
+        logger.error(f"Error shutting down data aggregator: {e}")
 
 # Include authentication routes
 app.include_router(auth_router)
@@ -252,6 +297,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register AI Trading Services routes: {e}")
 
+# Include Market Data routes (Institutional data feeds with <200ms latency)
+try:
+    from .market_data_routes import router as market_data_router
+    app.include_router(market_data_router)
+    logger.info("Market Data routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Market Data routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -337,11 +390,19 @@ async def root():
             "ai_risk_limits": "/api/ai/risk/limits/{risk_level}",
             "ai_position_sizing": "/api/ai/risk/position-sizing",
             "ai_platform_critique": "/api/ai/critique/platform",
+            "market_data_quote": "/api/market-data/quote/{symbol}",
+            "market_data_batch": "/api/market-data/quotes/batch?symbols=AAPL,MSFT",
+            "market_data_order_book": "/api/market-data/order-book/{symbol}",
+            "market_data_latency": "/api/market-data/latency-stats",
+            "market_data_providers": "/api/market-data/provider-status",
+            "market_data_health": "/api/market-data/health",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",
                 "anomaly_alerts": "/api/anomalies/ws/alerts/{user_id}",
-                "phase4_metrics": "/ws/phase4-metrics/{user_id}"
+                "phase4_metrics": "/ws/phase4-metrics/{user_id}",
+                "market_data_stream": "/api/market-data/ws/stream/{symbol}",
+                "market_data_multi": "/api/market-data/ws/stream-multi"
             }
         }
     }
