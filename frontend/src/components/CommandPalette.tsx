@@ -113,6 +113,14 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       shortcut: 'Ctrl+M'
     },
     {
+      id: 'nav-ai-recommendations',
+      name: 'AI Recommendations',
+      description: 'AI-powered platform analysis and insights',
+      action: () => navigate('/ai-recommendations'),
+      keywords: ['ai', 'recommendations', 'swarm', 'analysis', 'critique', 'risk', 'insights', 'expert'],
+      shortcut: 'Ctrl+I'
+    },
+    {
       id: 'nav-news',
       name: 'News Feed',
       description: 'View financial news',
@@ -193,7 +201,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       id: 'action-help',
       name: 'Help',
       description: 'Show help and keyboard shortcuts',
-      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+W - Custom Dashboard\nCtrl+O - Options Chain\nCtrl+V - Options Analytics\nCtrl+R - Risk Dashboard\nCtrl+E - Economic Calendar\nCtrl+B - Backtest\nCtrl+X - Execution Quality\nCtrl+L - Schwab Connection\nCtrl+U - Schwab Trading\nCtrl+M - Multi-Monitor\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
+      action: () => alert('Keyboard Shortcuts:\nCtrl+K - Command Palette\nCtrl+D - Dashboard\nCtrl+W - Custom Dashboard\nCtrl+O - Options Chain\nCtrl+V - Options Analytics\nCtrl+R - Risk Dashboard\nCtrl+E - Economic Calendar\nCtrl+B - Backtest\nCtrl+X - Execution Quality\nCtrl+L - Schwab Connection\nCtrl+U - Schwab Trading\nCtrl+M - Multi-Monitor\nCtrl+I - AI Recommendations\nCtrl+N - News\nCtrl+C - Charts\nCtrl+S - Sentiment\nCtrl+A - Anomalies\nCtrl+T - Paper Trading\nCtrl+P - Positions'),
       keywords: ['help', 'shortcuts', 'keyboard', 'commands'],
       shortcut: '?'
     }

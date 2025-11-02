@@ -244,6 +244,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Schwab API routes: {e}")
 
+# Include AI Trading Services routes (Swarm analysis, risk management, expert critique)
+try:
+    from .ai_routes import router as ai_router
+    app.include_router(ai_router)
+    logger.info("AI Trading Services routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register AI Trading Services routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -323,6 +331,12 @@ async def root():
             "schwab_place_order": "/api/schwab/accounts/{account_id}/orders",
             "schwab_cancel_order": "/api/schwab/accounts/{account_id}/orders/{order_id}",
             "schwab_order_status": "/api/schwab/accounts/{account_id}/orders/{order_id}",
+            "ai_swarm_analyze": "/api/ai/swarm/analyze",
+            "ai_swarm_compare": "/api/ai/swarm/compare",
+            "ai_risk_check": "/api/ai/risk/check-position",
+            "ai_risk_limits": "/api/ai/risk/limits/{risk_level}",
+            "ai_position_sizing": "/api/ai/risk/position-sizing",
+            "ai_platform_critique": "/api/ai/critique/platform",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",

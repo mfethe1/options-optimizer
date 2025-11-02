@@ -23,6 +23,7 @@ import CustomDashboardPage from './pages/CustomDashboardPage';
 import SchwabConnectionPage from './pages/SchwabConnectionPage';
 import SchwabTradingPage from './pages/SchwabTradingPage';
 import MultiMonitorPage from './pages/MultiMonitorPage';
+import AIRecommendationsPage from './pages/AIRecommendationsPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -108,6 +109,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/multi-monitor');
             break;
+          case 'i':
+            e.preventDefault();
+            navigate('/ai-recommendations');
+            break;
         }
       }
     };
@@ -143,6 +148,7 @@ function AppContent() {
                 <a href="/schwab-connection" className="text-purple-600 hover:text-purple-800 font-bold">🔗 Schwab</a>
                 <a href="/schwab-trading" className="text-purple-600 hover:text-purple-800 font-bold">💰 Trade</a>
                 <a href="/multi-monitor" className="text-indigo-600 hover:text-indigo-800 font-bold">🖥️ Multi-Monitor</a>
+                <a href="/ai-recommendations" className="text-pink-600 hover:text-pink-800 font-bold">🤖 AI Insights</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -189,6 +195,7 @@ function AppContent() {
             <Route path="/schwab-connection" element={<SchwabConnectionPage />} />
             <Route path="/schwab-trading" element={<SchwabTradingPage />} />
             <Route path="/multi-monitor" element={<MultiMonitorPage />} />
+            <Route path="/ai-recommendations" element={<AIRecommendationsPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
