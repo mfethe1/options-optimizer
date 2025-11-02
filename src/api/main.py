@@ -124,6 +124,27 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize data aggregator: {e}")
 
+    # Initialize smart order router
+    try:
+        from .market_data_routes import data_aggregator
+        from .smart_routing_routes import initialize_smart_router
+        from ..integrations.schwab_api import SchwabAPIService
+
+        # Initialize Schwab API for order execution
+        schwab_api = SchwabAPIService(
+            client_id=os.getenv("SCHWAB_CLIENT_ID", ""),
+            client_secret=os.getenv("SCHWAB_CLIENT_SECRET", ""),
+            redirect_uri=os.getenv("SCHWAB_REDIRECT_URI", "https://localhost:8000/callback")
+        )
+
+        if data_aggregator:
+            await initialize_smart_router(data_aggregator, schwab_api)
+            logger.info("Smart order router initialized successfully")
+        else:
+            logger.warning("Data aggregator not available - smart router not initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize smart router: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -305,6 +326,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Market Data routes: {e}")
 
+# Include Smart Routing routes (TWAP/VWAP/Iceberg order execution)
+try:
+    from .smart_routing_routes import router as smart_routing_router
+    app.include_router(smart_routing_router)
+    logger.info("Smart Routing routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Smart Routing routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -396,6 +425,12 @@ async def root():
             "market_data_latency": "/api/market-data/latency-stats",
             "market_data_providers": "/api/market-data/provider-status",
             "market_data_health": "/api/market-data/health",
+            "smart_routing_submit": "/api/smart-routing/submit",
+            "smart_routing_status": "/api/smart-routing/status/{order_id}",
+            "smart_routing_cancel": "/api/smart-routing/cancel/{order_id}",
+            "smart_routing_stats": "/api/smart-routing/stats",
+            "smart_routing_reports": "/api/smart-routing/reports",
+            "smart_routing_strategies": "/api/smart-routing/strategies",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",
