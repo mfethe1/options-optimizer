@@ -10,6 +10,7 @@ import logging
 import time
 from datetime import datetime, date
 import asyncio
+import os
 
 from .models import (
     Position, PositionCreate, PositionUpdate,
@@ -79,20 +80,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Startup and shutdown events for agent stream manager
+# Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():
-    """Start background tasks on application startup"""
+    """Start background tasks and services on application startup"""
     logger.info("Starting agent stream heartbeat task...")
     await agent_stream_manager.start_heartbeat()
     logger.info("Agent stream manager initialized")
 
+    # Initialize institutional data aggregator
+    try:
+        from .market_data_routes import initialize_data_aggregator
+
+        # Load API keys from environment
+        api_keys = {}
+
+        # Polygon.io
+        if os.getenv("POLYGON_API_KEY"):
+            api_keys["polygon"] = os.getenv("POLYGON_API_KEY")
+            logger.info("Polygon API key loaded")
+
+        # Alpaca
+        if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
+            api_keys["alpaca_key"] = os.getenv("ALPACA_API_KEY")
+            api_keys["alpaca_secret"] = os.getenv("ALPACA_SECRET_KEY")
+            logger.info("Alpaca API credentials loaded")
+
+        # Finnhub
+        if os.getenv("FINNHUB_API_KEY"):
+            api_keys["finnhub"] = os.getenv("FINNHUB_API_KEY")
+            logger.info("Finnhub API key loaded")
+
+        # IEX Cloud
+        if os.getenv("IEX_CLOUD_API_KEY"):
+            api_keys["iex_cloud"] = os.getenv("IEX_CLOUD_API_KEY")
+            logger.info("IEX Cloud API key loaded")
+
+        if api_keys:
+            await initialize_data_aggregator(api_keys)
+            logger.info(f"Institutional data aggregator initialized with {len(api_keys)} providers")
+        else:
+            logger.warning("No market data API keys found - data aggregator not initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize data aggregator: {e}")
+
+    # Initialize smart order router
+    try:
+        from .market_data_routes import data_aggregator
+        from .smart_routing_routes import initialize_smart_router
+        from ..integrations.schwab_api import SchwabAPIService
+
+        # Initialize Schwab API for order execution
+        schwab_api = SchwabAPIService(
+            client_id=os.getenv("SCHWAB_CLIENT_ID", ""),
+            client_secret=os.getenv("SCHWAB_CLIENT_SECRET", ""),
+            redirect_uri=os.getenv("SCHWAB_REDIRECT_URI", "https://localhost:8000/callback")
+        )
+
+        if data_aggregator:
+            await initialize_smart_router(data_aggregator, schwab_api)
+            logger.info("Smart order router initialized successfully")
+        else:
+            logger.warning("Data aggregator not available - smart router not initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize smart router: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop background tasks on application shutdown"""
+    """Stop background tasks and services on application shutdown"""
     logger.info("Stopping agent stream heartbeat task...")
     await agent_stream_manager.stop_heartbeat()
     logger.info("Agent stream manager shut down")
+
+    # Shutdown institutional data aggregator
+    try:
+        from .market_data_routes import shutdown_data_aggregator
+        await shutdown_data_aggregator()
+        logger.info("Institutional data aggregator shut down")
+    except Exception as e:
+        logger.error(f"Error shutting down data aggregator: {e}")
 
 # Include authentication routes
 app.include_router(auth_router)
@@ -140,6 +206,134 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Phase 4 WebSocket routes: {e}")
 
+# Include Conversational Trading routes (Natural language interface)
+try:
+    from .conversational_routes import router as conversational_router
+    app.include_router(conversational_router)
+    logger.info("Conversational Trading routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Conversational Trading routes: {e}")
+
+# Include Vision Analysis routes (Chart image analysis)
+try:
+    from .vision_routes import router as vision_router
+    app.include_router(vision_router)
+    logger.info("Vision Analysis routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Vision Analysis routes: {e}")
+
+# Include Anomaly Detection routes (Real-time alerts)
+try:
+    from .anomaly_routes import router as anomaly_router
+    app.include_router(anomaly_router)
+    logger.info("Anomaly Detection routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Anomaly Detection routes: {e}")
+
+# Include Sentiment Analysis routes (Deep sentiment with influencer weighting)
+try:
+    from .sentiment_routes import router as sentiment_router
+    app.include_router(sentiment_router)
+    logger.info("Sentiment Analysis routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Sentiment Analysis routes: {e}")
+
+# Include Paper Trading routes (AI-powered autonomous trading)
+try:
+    from .paper_trading_routes import router as paper_trading_router
+    app.include_router(paper_trading_router)
+    logger.info("Paper Trading routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Paper Trading routes: {e}")
+
+# Include Options Chain routes (Bloomberg OMON equivalent)
+try:
+    from .options_chain_routes import router as options_chain_router
+    app.include_router(options_chain_router)
+    logger.info("Options Chain routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Options Chain routes: {e}")
+
+# Include Risk Dashboard routes (Bloomberg PORT equivalent)
+try:
+    from .risk_dashboard_routes import router as risk_dashboard_router
+    app.include_router(risk_dashboard_router)
+    logger.info("Risk Dashboard routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Risk Dashboard routes: {e}")
+
+# Include News routes (Bloomberg NEWS equivalent)
+try:
+    from .news_routes import router as news_router
+    app.include_router(news_router)
+    logger.info("News routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register News routes: {e}")
+
+# Include Options Analytics routes (IV surface, skew, term structure)
+try:
+    from .options_analytics_routes import router as options_analytics_router
+    app.include_router(options_analytics_router)
+    logger.info("Options Analytics routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Options Analytics routes: {e}")
+
+# Include Calendar routes (Bloomberg EVTS equivalent - Earnings & Economic Events)
+try:
+    from .calendar_routes import router as calendar_router
+    app.include_router(calendar_router)
+    logger.info("Calendar routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Calendar routes: {e}")
+
+# Include Backtest routes (Historical strategy testing)
+try:
+    from .backtest_routes import router as backtest_router
+    app.include_router(backtest_router)
+    logger.info("Backtest routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Backtest routes: {e}")
+
+# Include Execution Quality routes (Fill quality and slippage tracking)
+try:
+    from .execution_routes import router as execution_router
+    app.include_router(execution_router)
+    logger.info("Execution Quality routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Execution Quality routes: {e}")
+
+# Include Schwab API routes (Live trading integration)
+try:
+    from .schwab_routes import router as schwab_router
+    app.include_router(schwab_router)
+    logger.info("Schwab API routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Schwab API routes: {e}")
+
+# Include AI Trading Services routes (Swarm analysis, risk management, expert critique)
+try:
+    from .ai_routes import router as ai_router
+    app.include_router(ai_router)
+    logger.info("AI Trading Services routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register AI Trading Services routes: {e}")
+
+# Include Market Data routes (Institutional data feeds with <200ms latency)
+try:
+    from .market_data_routes import router as market_data_router
+    app.include_router(market_data_router)
+    logger.info("Market Data routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Market Data routes: {e}")
+
+# Include Smart Routing routes (TWAP/VWAP/Iceberg order execution)
+try:
+    from .smart_routing_routes import router as smart_routing_router
+    app.include_router(smart_routing_router)
+    logger.info("Smart Routing routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Smart Routing routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -176,13 +370,75 @@ async def root():
         "status": "ok",
         "service": "investor-report",
         "version": __version__,
-        "description": "Renaissance-level options analytics with institutional-grade metrics",
+        "description": "World-class options analytics with AI-powered trading agents",
+        "competitive_advantages": [
+            "Natural language trading interface",
+            "AI-powered chart image analysis",
+            "Real-time anomaly detection",
+            "Deep sentiment with influencer weighting",
+            "Autonomous paper trading with multi-agent consensus"
+        ],
         "endpoints": {
             "health": "/health",
-            "investor_report": "/api/investor-report",
-            "phase4_stream": "/ws/phase4-metrics/{user_id}",
+            "docs": "/docs",
             "metrics": "/metrics",
-            "docs": "/docs"
+            "investor_report": "/api/investor-report",
+            "conversational_trading": "/api/conversation/message",
+            "chart_analysis": "/api/vision/analyze-chart",
+            "anomaly_detection": "/api/anomalies/detect",
+            "sentiment_analysis": "/api/sentiment/analyze",
+            "paper_trading": "/api/paper-trading/execute",
+            "options_chain": "/api/options-chain/{symbol}",
+            "options_analytics": "/api/options-analytics/{symbol}/complete",
+            "risk_dashboard": "/api/risk-dashboard/{user_id}",
+            "news": "/api/news",
+            "news_search": "/api/news/search",
+            "news_by_symbol": "/api/news/symbols/{symbol}",
+            "calendar_earnings": "/api/calendar/earnings",
+            "calendar_economic": "/api/calendar/economic",
+            "calendar_complete": "/api/calendar/complete",
+            "calendar_upcoming": "/api/calendar/upcoming-week",
+            "backtest_run": "/api/backtest/run",
+            "backtest_strategies": "/api/backtest/strategies",
+            "backtest_compare": "/api/backtest/compare",
+            "execution_analysis": "/api/execution/analysis",
+            "execution_record_order": "/api/execution/record-order",
+            "execution_record_fill": "/api/execution/record-fill",
+            "schwab_auth_url": "/api/schwab/auth/url",
+            "schwab_auth_token": "/api/schwab/auth/token",
+            "schwab_accounts": "/api/schwab/accounts",
+            "schwab_positions": "/api/schwab/accounts/{account_id}/positions",
+            "schwab_quote": "/api/schwab/quote/{symbol}",
+            "schwab_options": "/api/schwab/options/{symbol}",
+            "schwab_place_order": "/api/schwab/accounts/{account_id}/orders",
+            "schwab_cancel_order": "/api/schwab/accounts/{account_id}/orders/{order_id}",
+            "schwab_order_status": "/api/schwab/accounts/{account_id}/orders/{order_id}",
+            "ai_swarm_analyze": "/api/ai/swarm/analyze",
+            "ai_swarm_compare": "/api/ai/swarm/compare",
+            "ai_risk_check": "/api/ai/risk/check-position",
+            "ai_risk_limits": "/api/ai/risk/limits/{risk_level}",
+            "ai_position_sizing": "/api/ai/risk/position-sizing",
+            "ai_platform_critique": "/api/ai/critique/platform",
+            "market_data_quote": "/api/market-data/quote/{symbol}",
+            "market_data_batch": "/api/market-data/quotes/batch?symbols=AAPL,MSFT",
+            "market_data_order_book": "/api/market-data/order-book/{symbol}",
+            "market_data_latency": "/api/market-data/latency-stats",
+            "market_data_providers": "/api/market-data/provider-status",
+            "market_data_health": "/api/market-data/health",
+            "smart_routing_submit": "/api/smart-routing/submit",
+            "smart_routing_status": "/api/smart-routing/status/{order_id}",
+            "smart_routing_cancel": "/api/smart-routing/cancel/{order_id}",
+            "smart_routing_stats": "/api/smart-routing/stats",
+            "smart_routing_reports": "/api/smart-routing/reports",
+            "smart_routing_strategies": "/api/smart-routing/strategies",
+            "websockets": {
+                "agent_stream": "/ws/agent-stream/{user_id}",
+                "news_stream": "/api/news/ws/stream",
+                "anomaly_alerts": "/api/anomalies/ws/alerts/{user_id}",
+                "phase4_metrics": "/ws/phase4-metrics/{user_id}",
+                "market_data_stream": "/api/market-data/ws/stream/{symbol}",
+                "market_data_multi": "/api/market-data/ws/stream-multi"
+            }
         }
     }
 
