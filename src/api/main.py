@@ -169,6 +169,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize broker manager: {e}")
 
+    # Initialize epidemic volatility service
+    try:
+        from .epidemic_volatility_routes import initialize_epidemic_service
+        await initialize_epidemic_service()
+        logger.info("Epidemic volatility service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize epidemic volatility service: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -389,6 +397,14 @@ try:
     logger.info("Broker Management routes registered successfully")
 except Exception as e:
     logger.warning(f"Could not register Broker Management routes: {e}")
+
+# Include Epidemic Volatility routes (Bio-Financial breakthrough - disease dynamics for market fear)
+try:
+    from .epidemic_volatility_routes import router as epidemic_router
+    app.include_router(epidemic_router)
+    logger.info("Epidemic Volatility routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Epidemic Volatility routes: {e}")
 
 # Initialize coordinator
 coordinator = CoordinatorAgent()
