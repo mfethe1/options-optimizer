@@ -177,6 +177,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize epidemic volatility service: {e}")
 
+    # Initialize advanced forecasting service (Priority #1: TFT + Conformal)
+    try:
+        from .advanced_forecast_routes import initialize_advanced_forecast_service
+        await initialize_advanced_forecast_service()
+        logger.info("Advanced forecasting service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize advanced forecasting service: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -405,6 +413,14 @@ try:
     logger.info("Epidemic Volatility routes registered successfully")
 except Exception as e:
     logger.warning(f"Could not register Epidemic Volatility routes: {e}")
+
+# Include Advanced Forecasting routes (Priority #1: TFT + TimesFM + Conformal Prediction)
+try:
+    from .advanced_forecast_routes import router as advanced_forecast_router
+    app.include_router(advanced_forecast_router)
+    logger.info("Advanced Forecasting routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Advanced Forecasting routes: {e}")
 
 # Initialize coordinator
 coordinator = CoordinatorAgent()
