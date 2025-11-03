@@ -161,6 +161,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize stress testing engine: {e}")
 
+    # Initialize broker manager
+    try:
+        from .broker_routes import initialize_broker_manager
+        await initialize_broker_manager()
+        logger.info("Broker manager initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize broker manager: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -175,6 +183,14 @@ async def shutdown_event():
         logger.info("Institutional data aggregator shut down")
     except Exception as e:
         logger.error(f"Error shutting down data aggregator: {e}")
+
+    # Shutdown broker manager
+    try:
+        from .broker_routes import shutdown_broker_manager
+        await shutdown_broker_manager()
+        logger.info("Broker manager shut down")
+    except Exception as e:
+        logger.error(f"Error shutting down broker manager: {e}")
 
 # Include authentication routes
 app.include_router(auth_router)
@@ -366,6 +382,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Stress Testing routes: {e}")
 
+# Include Broker Management routes (Multi-broker connectivity)
+try:
+    from .broker_routes import router as broker_router
+    app.include_router(broker_router)
+    logger.info("Broker Management routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Broker Management routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -475,6 +499,15 @@ async def root():
             "stress_scenarios": "/api/stress-testing/scenarios",
             "stress_scenario_info": "/api/stress-testing/scenarios/{scenario_type}",
             "stress_health": "/api/stress-testing/health",
+            "broker_connect": "/api/brokers/connect",
+            "broker_disconnect": "/api/brokers/disconnect/{broker_type}",
+            "broker_health": "/api/brokers/health",
+            "broker_status": "/api/brokers/status",
+            "broker_quote": "/api/brokers/quote/{symbol}",
+            "broker_account": "/api/brokers/account",
+            "broker_place_order": "/api/brokers/orders",
+            "broker_cancel_order": "/api/brokers/orders/{broker_type}/{order_id}",
+            "broker_get_order": "/api/brokers/orders/{broker_type}/{order_id}",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",

@@ -28,6 +28,7 @@ import RealTimeQuotePage from './pages/RealTimeQuotePage';
 import SmartRoutingPage from './pages/SmartRoutingPage';
 import MLPredictionsPage from './pages/MLPredictionsPage';
 import StressTestingPage from './pages/StressTestingPage';
+import BrokerManagementPage from './pages/BrokerManagementPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -133,6 +134,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/stress-testing');
             break;
+          case 'f':
+            e.preventDefault();
+            navigate('/broker-management');
+            break;
         }
       }
     };
@@ -173,6 +178,7 @@ function AppContent() {
                 <a href="/smart-routing" className="text-purple-600 hover:text-purple-800 font-bold">🎯 Smart Routing</a>
                 <a href="/ml-predictions" className="text-pink-600 hover:text-pink-800 font-bold">🧠 ML Predictions</a>
                 <a href="/stress-testing" className="text-red-600 hover:text-red-800 font-bold">🛡️ Stress Testing</a>
+                <a href="/broker-management" className="text-indigo-600 hover:text-indigo-800 font-bold">🔗 Brokers</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -224,6 +230,7 @@ function AppContent() {
             <Route path="/smart-routing" element={<SmartRoutingPage />} />
             <Route path="/ml-predictions" element={<MLPredictionsPage />} />
             <Route path="/stress-testing" element={<StressTestingPage />} />
+            <Route path="/broker-management" element={<BrokerManagementPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
