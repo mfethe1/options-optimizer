@@ -145,6 +145,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize smart router: {e}")
 
+    # Initialize ML prediction service
+    try:
+        from .ml_prediction_routes import initialize_ml_service
+        await initialize_ml_service()
+        logger.info("ML prediction service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize ML service: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -334,6 +342,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Smart Routing routes: {e}")
 
+# Include ML Prediction routes (LSTM price prediction)
+try:
+    from .ml_prediction_routes import router as ml_router
+    app.include_router(ml_router)
+    logger.info("ML Prediction routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register ML Prediction routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -431,6 +447,12 @@ async def root():
             "smart_routing_stats": "/api/smart-routing/stats",
             "smart_routing_reports": "/api/smart-routing/reports",
             "smart_routing_strategies": "/api/smart-routing/strategies",
+            "ml_predict": "/api/ml/predict/{symbol}",
+            "ml_batch_predict": "/api/ml/predict/batch",
+            "ml_train": "/api/ml/train",
+            "ml_model_info": "/api/ml/model/info/{symbol}",
+            "ml_strategies": "/api/ml/strategies",
+            "ml_health": "/api/ml/health",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",

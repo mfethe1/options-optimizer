@@ -23,9 +23,11 @@ pyarrow==14.0.1
 # Options pricing
 QuantLib-Python==1.32
 
-# Machine learning (optional for future enhancements)
+# Machine learning
 scikit-learn==1.3.2
 statsmodels==0.14.0
+tensorflow==2.15.0  # For LSTM price prediction
+yfinance==0.2.32  # Fallback data provider for ML training
 
 # Task queue
 celery==5.3.4
