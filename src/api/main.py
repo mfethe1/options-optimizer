@@ -153,6 +153,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize ML service: {e}")
 
+    # Initialize stress testing engine
+    try:
+        from .stress_testing_routes import initialize_stress_engine
+        await initialize_stress_engine()
+        logger.info("Stress testing engine initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize stress testing engine: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -350,6 +358,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register ML Prediction routes: {e}")
 
+# Include Stress Testing routes (Historical scenarios & Monte Carlo)
+try:
+    from .stress_testing_routes import router as stress_testing_router
+    app.include_router(stress_testing_router)
+    logger.info("Stress Testing routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Stress Testing routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -453,6 +469,12 @@ async def root():
             "ml_model_info": "/api/ml/model/info/{symbol}",
             "ml_strategies": "/api/ml/strategies",
             "ml_health": "/api/ml/health",
+            "stress_run_scenario": "/api/stress-testing/scenario/run",
+            "stress_run_all": "/api/stress-testing/scenario/run-all",
+            "stress_monte_carlo": "/api/stress-testing/monte-carlo",
+            "stress_scenarios": "/api/stress-testing/scenarios",
+            "stress_scenario_info": "/api/stress-testing/scenarios/{scenario_type}",
+            "stress_health": "/api/stress-testing/health",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",
