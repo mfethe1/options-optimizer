@@ -185,6 +185,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize advanced forecasting service: {e}")
 
+    # Initialize GNN service (Priority #2: Graph Neural Networks)
+    try:
+        from .gnn_routes import initialize_gnn_service
+        await initialize_gnn_service()
+        logger.info("GNN service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize GNN service: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -421,6 +429,14 @@ try:
     logger.info("Advanced Forecasting routes registered successfully")
 except Exception as e:
     logger.warning(f"Could not register Advanced Forecasting routes: {e}")
+
+# Include GNN routes (Priority #2: Graph Neural Networks - Universal Consensus)
+try:
+    from .gnn_routes import router as gnn_router
+    app.include_router(gnn_router)
+    logger.info("GNN routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register GNN routes: {e}")
 
 # Initialize coordinator
 coordinator = CoordinatorAgent()
