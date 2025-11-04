@@ -193,6 +193,22 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize GNN service: {e}")
 
+    # Initialize Mamba service (Priority #3: State Space Model - Linear Complexity)
+    try:
+        from .mamba_routes import initialize_mamba_service
+        await initialize_mamba_service()
+        logger.info("Mamba service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Mamba service: {e}")
+
+    # Initialize PINN service (Priority #4: Physics-Informed Neural Networks)
+    try:
+        from .pinn_routes import initialize_pinn_service
+        await initialize_pinn_service()
+        logger.info("PINN service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize PINN service: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -437,6 +453,22 @@ try:
     logger.info("GNN routes registered successfully")
 except Exception as e:
     logger.warning(f"Could not register GNN routes: {e}")
+
+# Include Mamba routes (Priority #3: State Space Model - Linear Complexity)
+try:
+    from .mamba_routes import router as mamba_router
+    app.include_router(mamba_router)
+    logger.info("Mamba routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Mamba routes: {e}")
+
+# Include PINN routes (Priority #4: Physics-Informed Neural Networks)
+try:
+    from .pinn_routes import router as pinn_router
+    app.include_router(pinn_router)
+    logger.info("PINN routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register PINN routes: {e}")
 
 # Initialize coordinator
 coordinator = CoordinatorAgent()

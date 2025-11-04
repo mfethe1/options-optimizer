@@ -31,6 +31,8 @@ import StressTestingPage from './pages/StressTestingPage';
 import BrokerManagementPage from './pages/BrokerManagementPage';
 import EpidemicVolatilityPage from './pages/BioFinancial/EpidemicVolatilityPage';
 import GNNPage from './pages/AdvancedForecasting/GNNPage';
+import MambaPage from './pages/AdvancedForecasting/MambaPage';
+import PINNPage from './pages/AdvancedForecasting/PINNPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -144,6 +146,14 @@ function AppContent() {
             e.preventDefault();
             navigate('/epidemic-volatility');
             break;
+          case 'h':
+            e.preventDefault();
+            navigate('/mamba');
+            break;
+          case '1':
+            e.preventDefault();
+            navigate('/pinn');
+            break;
         }
       }
     };
@@ -187,6 +197,8 @@ function AppContent() {
                 <a href="/broker-management" className="text-indigo-600 hover:text-indigo-800 font-bold">🔗 Brokers</a>
                 <a href="/epidemic-volatility" className="text-purple-600 hover:text-purple-800 font-bold">🦠 Epidemic Vol</a>
                 <a href="/gnn" className="text-blue-600 hover:text-blue-800 font-bold">📊 GNN</a>
+                <a href="/mamba" className="text-green-600 hover:text-green-800 font-bold">⚡ Mamba</a>
+                <a href="/pinn" className="text-indigo-600 hover:text-indigo-800 font-bold">🧬 PINN</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -241,6 +253,8 @@ function AppContent() {
             <Route path="/broker-management" element={<BrokerManagementPage />} />
             <Route path="/epidemic-volatility" element={<EpidemicVolatilityPage />} />
             <Route path="/gnn" element={<GNNPage />} />
+            <Route path="/mamba" element={<MambaPage />} />
+            <Route path="/pinn" element={<PINNPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
