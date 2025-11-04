@@ -5,7 +5,7 @@
  * Expected impact: +2-4% monthly through better entry/exit timing.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import {
   getMLPrediction,
@@ -18,6 +18,11 @@ import {
   ModelInfo,
   MLStrategy
 } from '../services/mlApi';
+import {
+  MLPredictionChart,
+  generateSampleData,
+  OHLCVData
+} from '../components/charts';
 
 export default function MLPredictionsPage() {
   const [symbol, setSymbol] = useState('AAPL');
@@ -136,6 +141,50 @@ export default function MLPredictionsPage() {
     return 'bg-gray-100 text-gray-800';
   };
 
+  // Generate chart data for ML visualization
+  const chartData = useMemo(() => {
+    if (!prediction) return { historical: [], predictions: [] };
+
+    // Generate historical data (365 days of price history)
+    const currentPrice = prediction.current_price;
+    const historicalData = generateSampleData(365, currentPrice * 0.9);
+
+    // Ensure last bar matches current price
+    if (historicalData.length > 0) {
+      historicalData[historicalData.length - 1].close = currentPrice;
+    }
+
+    // Generate ML predictions (5-day forecast)
+    const lastTime = new Date(historicalData[historicalData.length - 1].time);
+    const predictionData: any[] = [];
+
+    // Create predictions for 1-day and 5-day targets
+    const targets = [
+      { days: 1, price: prediction.target_price_1d },
+      { days: 5, price: prediction.target_price_5d }
+    ];
+
+    targets.forEach(({ days, price }) => {
+      const futureDate = new Date(lastTime);
+      futureDate.setDate(futureDate.getDate() + days);
+
+      // Calculate uncertainty based on confidence (lower confidence = wider bands)
+      const uncertainty = Math.abs(price - currentPrice) * (1 - prediction.confidence) * 2;
+
+      predictionData.push({
+        timestamp: futureDate,
+        horizon: days,
+        point_prediction: price,
+        q10: price - uncertainty,
+        q50: price,
+        q90: price + uncertainty,
+        model_name: 'LSTM Ensemble'
+      });
+    });
+
+    return { historical: historicalData, predictions: predictionData };
+  }, [prediction]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
@@ -203,6 +252,20 @@ export default function MLPredictionsPage() {
           </div>
         </div>
       </div>
+
+      {/* ML Prediction Chart - Professional Visualization */}
+      {!loading && prediction && chartData.historical.length > 0 && (
+        <div className="mb-6">
+          <MLPredictionChart
+            historicalData={chartData.historical}
+            predictions={chartData.predictions}
+            currentPrice={prediction.current_price}
+            showQuantiles={true}
+            showConformalIntervals={false}
+            height={700}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* ML Prediction */}

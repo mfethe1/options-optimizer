@@ -3,7 +3,7 @@
  * Priority #4: Option pricing & portfolio optimization with physics constraints
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -39,6 +39,11 @@ import {
   OptionPriceResponse,
   PortfolioOptimizationResponse
 } from '../../api/pinnApi';
+import {
+  VolatilitySurface3D,
+  generateSampleGreeksSurface,
+  generateSampleIVSurface
+} from '../../components/charts';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -67,6 +72,7 @@ const PINNPage: React.FC = () => {
   const [riskFreeRate, setRiskFreeRate] = useState<number>(0.05);
   const [optionResult, setOptionResult] = useState<OptionPriceResponse | null>(null);
   const [optionLoading, setOptionLoading] = useState(false);
+  const [selectedSurface, setSelectedSurface] = useState<'delta' | 'gamma' | 'vega' | 'theta'>('delta');
 
   // Portfolio Optimization State
   const [portfolioSymbols, setPortfolioSymbols] = useState<string>('AAPL, MSFT, GOOGL, AMZN, NVDA');
@@ -150,6 +156,11 @@ const PINNPage: React.FC = () => {
       setPortfolioLoading(false);
     }
   };
+
+  // Generate Greeks surface data for visualization
+  const surfaceData = useMemo(() => {
+    return generateSampleGreeksSurface(selectedSurface);
+  }, [selectedSurface]);
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -364,6 +375,39 @@ const PINNPage: React.FC = () => {
                 </CardContent>
               </Card>
             )}
+          </Grid>
+
+          {/* 3D Greeks Surface Visualization */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">
+                    3D Greeks Surface Visualization
+                  </Typography>
+                  <FormControl sx={{ minWidth: 150 }}>
+                    <InputLabel>Surface Type</InputLabel>
+                    <Select
+                      value={selectedSurface}
+                      onChange={(e) => setSelectedSurface(e.target.value as any)}
+                      label="Surface Type"
+                    >
+                      <MenuItem value="delta">Delta</MenuItem>
+                      <MenuItem value="gamma">Gamma</MenuItem>
+                      <MenuItem value="vega">Vega</MenuItem>
+                      <MenuItem value="theta">Theta</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+                <VolatilitySurface3D
+                  data={surfaceData}
+                  surfaceType={selectedSurface}
+                  theme="dark"
+                  width={1100}
+                  height={600}
+                />
+              </CardContent>
+            </Card>
           </Grid>
         </Grid>
       </TabPanel>

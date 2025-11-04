@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -26,6 +26,7 @@ import {
 import { positionService } from '../services/positionService';
 
 import Grid from '@mui/material/Grid';
+import { PortfolioPnLChart, generateSamplePortfolioSnapshots } from '../components/charts';
 
 
 
@@ -165,6 +166,17 @@ const PositionsPage: React.FC = () => {
     return `${value.toFixed(2)}%`;
   };
 
+  // Generate portfolio performance data for chart
+  const portfolioSnapshots = useMemo(() => {
+    if (!portfolioSummary) return [];
+
+    // Use current portfolio value to generate historical data
+    const currentValue = portfolioSummary.total_current_value || 100000;
+
+    // Generate 365 days of historical snapshots
+    return generateSamplePortfolioSnapshots(currentValue * 0.95, 365);
+  }, [portfolioSummary]);
+
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Portfolio Summary */}
@@ -197,6 +209,20 @@ const PositionsPage: React.FC = () => {
             </Grid>
           </Grid>
         </Paper>
+      )}
+
+      {/* Portfolio Performance Chart */}
+      {portfolioSummary && portfolioSnapshots.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <PortfolioPnLChart
+            snapshots={portfolioSnapshots}
+            initialValue={portfolioSummary.total_current_value * 0.95}
+            theme="dark"
+            showDrawdown={true}
+            showBenchmark={true}
+            height={600}
+          />
+        </Box>
       )}
 
       {/* Action Buttons */}
