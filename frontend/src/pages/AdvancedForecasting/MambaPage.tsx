@@ -3,7 +3,7 @@
  * Priority #3: Linear O(N) complexity for very long sequences
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -36,6 +36,11 @@ import {
   MambaForecast,
   EfficiencyComparison
 } from '../../api/mambaApi';
+import {
+  MLPredictionChart,
+  generateSampleData,
+  OHLCVData
+} from '../../components/charts';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -118,6 +123,54 @@ const MambaPage: React.FC = () => {
     if (signal.includes('SELL')) return 'error';
     return 'default';
   };
+
+  // Generate chart data for ML visualization
+  const chartData = useMemo(() => {
+    if (!forecast) return { historical: [], predictions: [] };
+
+    // Generate historical data (use sequenceLength for days of history)
+    const historicalDays = Math.min(sequenceLength, 1000); // Cap at 1000 for performance
+    const currentPrice = forecast.current_price;
+    const historicalData = generateSampleData(historicalDays, currentPrice * 0.9);
+
+    // Ensure last bar matches current price
+    if (historicalData.length > 0) {
+      historicalData[historicalData.length - 1].close = currentPrice;
+    }
+
+    // Generate ML predictions from multi-horizon forecasts
+    const lastTime = new Date(historicalData[historicalData.length - 1].time);
+    const predictionData: any[] = [];
+
+    // Parse horizon strings (e.g., "1d", "5d", "30d") and create predictions
+    Object.entries(forecast.predictions).forEach(([horizon, price]) => {
+      const days = parseInt(horizon.replace(/\D/g, ''), 10);
+      if (isNaN(days)) return;
+
+      const futureDate = new Date(lastTime);
+      futureDate.setDate(futureDate.getDate() + days);
+
+      // Calculate uncertainty based on confidence and time horizon
+      const baseUncertainty = Math.abs(price - currentPrice) * (1 - forecast.confidence);
+      const horizonFactor = Math.sqrt(days / 5); // Uncertainty grows with sqrt(time)
+      const uncertainty = baseUncertainty * horizonFactor;
+
+      predictionData.push({
+        timestamp: futureDate,
+        horizon: days,
+        point_prediction: price,
+        q10: price - uncertainty,
+        q50: price,
+        q90: price + uncertainty,
+        model_name: 'Mamba SSM'
+      });
+    });
+
+    // Sort by horizon
+    predictionData.sort((a, b) => a.horizon - b.horizon);
+
+    return { historical: historicalData, predictions: predictionData };
+  }, [forecast, sequenceLength]);
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -204,6 +257,20 @@ const MambaPage: React.FC = () => {
         {loading && !forecast && (
           <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
             <CircularProgress />
+          </Box>
+        )}
+
+        {/* ML Prediction Chart - Professional Visualization */}
+        {!loading && forecast && chartData.historical.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <MLPredictionChart
+              historicalData={chartData.historical}
+              predictions={chartData.predictions}
+              currentPrice={forecast.current_price}
+              showQuantiles={true}
+              showConformalIntervals={false}
+              height={700}
+            />
           </Box>
         )}
 
