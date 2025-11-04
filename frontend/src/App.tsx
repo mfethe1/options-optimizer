@@ -34,6 +34,7 @@ import GNNPage from './pages/AdvancedForecasting/GNNPage';
 import MambaPage from './pages/AdvancedForecasting/MambaPage';
 import PINNPage from './pages/AdvancedForecasting/PINNPage';
 import EnsembleAnalysisPage from './pages/EnsembleAnalysisPage';
+import ChartsDemo from './pages/ChartsDemo';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -205,6 +206,7 @@ function AppContent() {
                 <a href="/mamba" className="text-green-600 hover:text-green-800 font-bold">⚡ Mamba</a>
                 <a href="/pinn" className="text-indigo-600 hover:text-indigo-800 font-bold">🧬 PINN</a>
                 <a href="/ensemble" className="text-amber-600 hover:text-amber-800 font-bold text-lg">🎯 Ensemble</a>
+                <a href="/charts-demo" className="text-blue-600 hover:text-blue-800 font-bold text-lg">📊 Charts Demo</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -262,6 +264,7 @@ function AppContent() {
             <Route path="/mamba" element={<MambaPage />} />
             <Route path="/pinn" element={<PINNPage />} />
             <Route path="/ensemble" element={<EnsembleAnalysisPage />} />
+            <Route path="/charts-demo" element={<ChartsDemo />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
