@@ -145,6 +145,78 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize smart router: {e}")
 
+    # Initialize ML prediction service
+    try:
+        from .ml_prediction_routes import initialize_ml_service
+        await initialize_ml_service()
+        logger.info("ML prediction service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize ML service: {e}")
+
+    # Initialize stress testing engine
+    try:
+        from .stress_testing_routes import initialize_stress_engine
+        await initialize_stress_engine()
+        logger.info("Stress testing engine initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize stress testing engine: {e}")
+
+    # Initialize broker manager
+    try:
+        from .broker_routes import initialize_broker_manager
+        await initialize_broker_manager()
+        logger.info("Broker manager initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize broker manager: {e}")
+
+    # Initialize epidemic volatility service
+    try:
+        from .epidemic_volatility_routes import initialize_epidemic_service
+        await initialize_epidemic_service()
+        logger.info("Epidemic volatility service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize epidemic volatility service: {e}")
+
+    # Initialize advanced forecasting service (Priority #1: TFT + Conformal)
+    try:
+        from .advanced_forecast_routes import initialize_advanced_forecast_service
+        await initialize_advanced_forecast_service()
+        logger.info("Advanced forecasting service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize advanced forecasting service: {e}")
+
+    # Initialize GNN service (Priority #2: Graph Neural Networks)
+    try:
+        from .gnn_routes import initialize_gnn_service
+        await initialize_gnn_service()
+        logger.info("GNN service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize GNN service: {e}")
+
+    # Initialize Mamba service (Priority #3: State Space Model - Linear Complexity)
+    try:
+        from .mamba_routes import initialize_mamba_service
+        await initialize_mamba_service()
+        logger.info("Mamba service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Mamba service: {e}")
+
+    # Initialize PINN service (Priority #4: Physics-Informed Neural Networks)
+    try:
+        from .pinn_routes import initialize_pinn_service
+        await initialize_pinn_service()
+        logger.info("PINN service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize PINN service: {e}")
+
+    # Initialize Ensemble service (Multi-Model Neural Network Ensemble)
+    try:
+        from .ensemble_routes import initialize_ensemble_service
+        await initialize_ensemble_service()
+        logger.info("Ensemble service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Ensemble service: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -159,6 +231,14 @@ async def shutdown_event():
         logger.info("Institutional data aggregator shut down")
     except Exception as e:
         logger.error(f"Error shutting down data aggregator: {e}")
+
+    # Shutdown broker manager
+    try:
+        from .broker_routes import shutdown_broker_manager
+        await shutdown_broker_manager()
+        logger.info("Broker manager shut down")
+    except Exception as e:
+        logger.error(f"Error shutting down broker manager: {e}")
 
 # Include authentication routes
 app.include_router(auth_router)
@@ -334,6 +414,78 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Smart Routing routes: {e}")
 
+# Include ML Prediction routes (LSTM price prediction)
+try:
+    from .ml_prediction_routes import router as ml_router
+    app.include_router(ml_router)
+    logger.info("ML Prediction routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register ML Prediction routes: {e}")
+
+# Include Stress Testing routes (Historical scenarios & Monte Carlo)
+try:
+    from .stress_testing_routes import router as stress_testing_router
+    app.include_router(stress_testing_router)
+    logger.info("Stress Testing routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Stress Testing routes: {e}")
+
+# Include Broker Management routes (Multi-broker connectivity)
+try:
+    from .broker_routes import router as broker_router
+    app.include_router(broker_router)
+    logger.info("Broker Management routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Broker Management routes: {e}")
+
+# Include Epidemic Volatility routes (Bio-Financial breakthrough - disease dynamics for market fear)
+try:
+    from .epidemic_volatility_routes import router as epidemic_router
+    app.include_router(epidemic_router)
+    logger.info("Epidemic Volatility routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Epidemic Volatility routes: {e}")
+
+# Include Advanced Forecasting routes (Priority #1: TFT + TimesFM + Conformal Prediction)
+try:
+    from .advanced_forecast_routes import router as advanced_forecast_router
+    app.include_router(advanced_forecast_router)
+    logger.info("Advanced Forecasting routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Advanced Forecasting routes: {e}")
+
+# Include GNN routes (Priority #2: Graph Neural Networks - Universal Consensus)
+try:
+    from .gnn_routes import router as gnn_router
+    app.include_router(gnn_router)
+    logger.info("GNN routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register GNN routes: {e}")
+
+# Include Mamba routes (Priority #3: State Space Model - Linear Complexity)
+try:
+    from .mamba_routes import router as mamba_router
+    app.include_router(mamba_router)
+    logger.info("Mamba routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Mamba routes: {e}")
+
+# Include PINN routes (Priority #4: Physics-Informed Neural Networks)
+try:
+    from .pinn_routes import router as pinn_router
+    app.include_router(pinn_router)
+    logger.info("PINN routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register PINN routes: {e}")
+
+# Include Ensemble routes (Multi-Model Neural Network Ensemble)
+try:
+    from .ensemble_routes import router as ensemble_router
+    app.include_router(ensemble_router)
+    logger.info("Ensemble routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Ensemble routes: {e}")
+
 # Initialize coordinator
 coordinator = CoordinatorAgent()
 
@@ -431,6 +583,27 @@ async def root():
             "smart_routing_stats": "/api/smart-routing/stats",
             "smart_routing_reports": "/api/smart-routing/reports",
             "smart_routing_strategies": "/api/smart-routing/strategies",
+            "ml_predict": "/api/ml/predict/{symbol}",
+            "ml_batch_predict": "/api/ml/predict/batch",
+            "ml_train": "/api/ml/train",
+            "ml_model_info": "/api/ml/model/info/{symbol}",
+            "ml_strategies": "/api/ml/strategies",
+            "ml_health": "/api/ml/health",
+            "stress_run_scenario": "/api/stress-testing/scenario/run",
+            "stress_run_all": "/api/stress-testing/scenario/run-all",
+            "stress_monte_carlo": "/api/stress-testing/monte-carlo",
+            "stress_scenarios": "/api/stress-testing/scenarios",
+            "stress_scenario_info": "/api/stress-testing/scenarios/{scenario_type}",
+            "stress_health": "/api/stress-testing/health",
+            "broker_connect": "/api/brokers/connect",
+            "broker_disconnect": "/api/brokers/disconnect/{broker_type}",
+            "broker_health": "/api/brokers/health",
+            "broker_status": "/api/brokers/status",
+            "broker_quote": "/api/brokers/quote/{symbol}",
+            "broker_account": "/api/brokers/account",
+            "broker_place_order": "/api/brokers/orders",
+            "broker_cancel_order": "/api/brokers/orders/{broker_type}/{order_id}",
+            "broker_get_order": "/api/brokers/orders/{broker_type}/{order_id}",
             "websockets": {
                 "agent_stream": "/ws/agent-stream/{user_id}",
                 "news_stream": "/api/news/ws/stream",

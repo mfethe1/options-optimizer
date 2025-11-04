@@ -26,6 +26,14 @@ import MultiMonitorPage from './pages/MultiMonitorPage';
 import AIRecommendationsPage from './pages/AIRecommendationsPage';
 import RealTimeQuotePage from './pages/RealTimeQuotePage';
 import SmartRoutingPage from './pages/SmartRoutingPage';
+import MLPredictionsPage from './pages/MLPredictionsPage';
+import StressTestingPage from './pages/StressTestingPage';
+import BrokerManagementPage from './pages/BrokerManagementPage';
+import EpidemicVolatilityPage from './pages/BioFinancial/EpidemicVolatilityPage';
+import GNNPage from './pages/AdvancedForecasting/GNNPage';
+import MambaPage from './pages/AdvancedForecasting/MambaPage';
+import PINNPage from './pages/AdvancedForecasting/PINNPage';
+import EnsembleAnalysisPage from './pages/EnsembleAnalysisPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -123,6 +131,34 @@ function AppContent() {
             e.preventDefault();
             navigate('/smart-routing');
             break;
+          case 'y':
+            e.preventDefault();
+            navigate('/ml-predictions');
+            break;
+          case 'z':
+            e.preventDefault();
+            navigate('/stress-testing');
+            break;
+          case 'f':
+            e.preventDefault();
+            navigate('/broker-management');
+            break;
+          case 'g':
+            e.preventDefault();
+            navigate('/epidemic-volatility');
+            break;
+          case 'h':
+            e.preventDefault();
+            navigate('/mamba');
+            break;
+          case '1':
+            e.preventDefault();
+            navigate('/pinn');
+            break;
+          case 'e':
+            e.preventDefault();
+            navigate('/ensemble');
+            break;
         }
       }
     };
@@ -161,6 +197,14 @@ function AppContent() {
                 <a href="/ai-recommendations" className="text-pink-600 hover:text-pink-800 font-bold">🤖 AI Insights</a>
                 <a href="/market-data" className="text-orange-600 hover:text-orange-800 font-bold">⚡ Live Data</a>
                 <a href="/smart-routing" className="text-purple-600 hover:text-purple-800 font-bold">🎯 Smart Routing</a>
+                <a href="/ml-predictions" className="text-pink-600 hover:text-pink-800 font-bold">🧠 ML Predictions</a>
+                <a href="/stress-testing" className="text-red-600 hover:text-red-800 font-bold">🛡️ Stress Testing</a>
+                <a href="/broker-management" className="text-indigo-600 hover:text-indigo-800 font-bold">🔗 Brokers</a>
+                <a href="/epidemic-volatility" className="text-purple-600 hover:text-purple-800 font-bold">🦠 Epidemic Vol</a>
+                <a href="/gnn" className="text-blue-600 hover:text-blue-800 font-bold">📊 GNN</a>
+                <a href="/mamba" className="text-green-600 hover:text-green-800 font-bold">⚡ Mamba</a>
+                <a href="/pinn" className="text-indigo-600 hover:text-indigo-800 font-bold">🧬 PINN</a>
+                <a href="/ensemble" className="text-amber-600 hover:text-amber-800 font-bold text-lg">🎯 Ensemble</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -210,6 +254,14 @@ function AppContent() {
             <Route path="/ai-recommendations" element={<AIRecommendationsPage />} />
             <Route path="/market-data" element={<RealTimeQuotePage />} />
             <Route path="/smart-routing" element={<SmartRoutingPage />} />
+            <Route path="/ml-predictions" element={<MLPredictionsPage />} />
+            <Route path="/stress-testing" element={<StressTestingPage />} />
+            <Route path="/broker-management" element={<BrokerManagementPage />} />
+            <Route path="/epidemic-volatility" element={<EpidemicVolatilityPage />} />
+            <Route path="/gnn" element={<GNNPage />} />
+            <Route path="/mamba" element={<MambaPage />} />
+            <Route path="/pinn" element={<PINNPage />} />
+            <Route path="/ensemble" element={<EnsembleAnalysisPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
