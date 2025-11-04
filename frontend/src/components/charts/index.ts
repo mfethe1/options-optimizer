@@ -46,6 +46,22 @@ export {
   generateSampleVIXForecast,
 } from './VIXForecastChart';
 export type { VIXForecastData, VIXForecastChartProps } from './VIXForecastChart';
+export {
+  default as GNNNetworkChart,
+  generateSampleGNNNetwork,
+} from './GNNNetworkChart';
+export type { GNNNode, GNNEdge, GNNNetworkData, GNNNetworkChartProps } from './GNNNetworkChart';
+export {
+  default as VolatilitySurface3D,
+  generateSampleIVSurface,
+  generateSampleGreeksSurface,
+} from './VolatilitySurface3D';
+export type { Surface3DData, VolatilitySurface3DProps } from './VolatilitySurface3D';
+export {
+  default as PortfolioPnLChart,
+  generateSamplePortfolioSnapshots,
+} from './PortfolioPnLChart';
+export type { PortfolioSnapshot, PortfolioPnLChartProps } from './PortfolioPnLChart';
 
 // Types
 export type {
