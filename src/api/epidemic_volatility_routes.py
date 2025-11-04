@@ -239,12 +239,13 @@ async def train_epidemic_model(request: TrainingRequest):
     This trains the Physics-Informed Neural Network that learns
     epidemic parameters (β, γ, σ) from market data.
     """
+    global trainer
+
     if trainer is None:
         raise HTTPException(status_code=503, detail="Trainer not initialized")
 
     try:
         # Initialize trainer with requested model type
-        global trainer
         trainer = EpidemicModelTrainer(model_type=request.model_type)
 
         # Train model

@@ -28,6 +28,9 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    tf = None
+    keras = None
+    layers = None
     logging.warning("TensorFlow not available - TFT features will be limited")
 
 logger = logging.getLogger(__name__)
@@ -68,87 +71,97 @@ class MultiHorizonForecast:
         return 0.0
 
 
-class GatedLinearUnit(layers.Layer):
-    """
-    Gated Linear Unit (GLU) for controlling information flow
-
-    GLU(x) = σ(Wx + b) ⊙ (Vx + c)
-    where σ is sigmoid, ⊙ is element-wise product
-    """
-
-    def __init__(self, units, **kwargs):
-        super().__init__(**kwargs)
-        self.units = units
-        self.dense1 = layers.Dense(units, activation='linear')
-        self.dense2 = layers.Dense(units, activation='sigmoid')
-
-    def call(self, x):
-        return self.dense1(x) * self.dense2(x)
-
-
-class VariableSelectionNetwork(layers.Layer):
-    """
-    Variable Selection Network - learns which input features are important
-
-    Outputs:
-    - Selected features with learned weights
-    - Feature importance scores
-    """
-
-    def __init__(self, num_features, hidden_units=32, **kwargs):
-        super().__init__(**kwargs)
-        self.num_features = num_features
-        self.hidden_units = hidden_units
-
-        # Context vector network
-        self.flatten = layers.Flatten()
-        self.context = layers.Dense(hidden_units, activation='relu')
-
-        # Feature weight network (outputs softmax weights)
-        self.weights = layers.Dense(num_features, activation='softmax')
-
-        # Feature processing (per-feature transform)
-        self.feature_nets = [
-            layers.Dense(hidden_units, activation='relu')
-            for _ in range(num_features)
-        ]
-
-    def call(self, x):
+if TENSORFLOW_AVAILABLE:
+    class GatedLinearUnit(layers.Layer):
         """
-        Args:
-            x: [batch, timesteps, features] or [batch, features]
+        Gated Linear Unit (GLU) for controlling information flow
 
-        Returns:
-            weighted_features, importance_scores
+        GLU(x) = σ(Wx + b) ⊙ (Vx + c)
+        where σ is sigmoid, ⊙ is element-wise product
         """
-        # Get context from all features
-        flat = self.flatten(x) if len(x.shape) > 2 else x
-        context = self.context(flat)
 
-        # Get feature importance weights
-        importance = self.weights(context)  # [batch, num_features]
+        def __init__(self, units, **kwargs):
+            super().__init__(**kwargs)
+            self.units = units
+            self.dense1 = layers.Dense(units, activation='linear')
+            self.dense2 = layers.Dense(units, activation='sigmoid')
 
-        # Process each feature
-        if len(x.shape) > 2:
-            # Temporal data
-            processed = []
-            for i, net in enumerate(self.feature_nets):
-                feat = x[:, :, i:i+1]  # [batch, timesteps, 1]
-                processed.append(net(feat))
-            processed = tf.stack(processed, axis=-1)  # [batch, timesteps, hidden, num_features]
-        else:
-            # Static data
-            processed = []
-            for i, net in enumerate(self.feature_nets):
-                feat = x[:, i:i+1]  # [batch, 1]
-                processed.append(net(feat))
-            processed = tf.stack(processed, axis=-1)  # [batch, hidden, num_features]
+        def call(self, x):
+            return self.dense1(x) * self.dense2(x)
+else:
+    class GatedLinearUnit:
+        def __init__(self, *args, **kwargs):
+            pass
 
-        # Weight features by importance
-        weighted = processed * importance[..., tf.newaxis, :]
-        selected = tf.reduce_sum(weighted, axis=-1)  # [batch, (timesteps), hidden]
 
-        return selected, importance
+if TENSORFLOW_AVAILABLE:
+    class VariableSelectionNetwork(layers.Layer):
+        """
+        Variable Selection Network - learns which input features are important
+
+        Outputs:
+        - Selected features with learned weights
+        - Feature importance scores
+        """
+
+        def __init__(self, num_features, hidden_units=32, **kwargs):
+            super().__init__(**kwargs)
+            self.num_features = num_features
+            self.hidden_units = hidden_units
+
+            # Context vector network
+            self.flatten = layers.Flatten()
+            self.context = layers.Dense(hidden_units, activation='relu')
+
+            # Feature weight network (outputs softmax weights)
+            self.weights = layers.Dense(num_features, activation='softmax')
+
+            # Feature processing (per-feature transform)
+            self.feature_nets = [
+                layers.Dense(hidden_units, activation='relu')
+                for _ in range(num_features)
+            ]
+
+        def call(self, x):
+            """
+            Args:
+                x: [batch, timesteps, features] or [batch, features]
+
+            Returns:
+                weighted_features, importance_scores
+            """
+            # Get context from all features
+            flat = self.flatten(x) if len(x.shape) > 2 else x
+            context = self.context(flat)
+
+            # Get feature importance weights
+            importance = self.weights(context)  # [batch, num_features]
+
+            # Process each feature
+            if len(x.shape) > 2:
+                # Temporal data
+                processed = []
+                for i, net in enumerate(self.feature_nets):
+                    feat = x[:, :, i:i+1]  # [batch, timesteps, 1]
+                    processed.append(net(feat))
+                processed = tf.stack(processed, axis=-1)  # [batch, timesteps, hidden, num_features]
+            else:
+                # Static data
+                processed = []
+                for i, net in enumerate(self.feature_nets):
+                    feat = x[:, i:i+1]  # [batch, 1]
+                    processed.append(net(feat))
+                processed = tf.stack(processed, axis=-1)  # [batch, hidden, num_features]
+
+            # Weight features by importance
+            weighted = processed * importance[..., tf.newaxis, :]
+            selected = tf.reduce_sum(weighted, axis=-1)  # [batch, (timesteps), hidden]
+
+            return selected, importance
+else:
+    class VariableSelectionNetwork:
+        def __init__(self, *args, **kwargs):
+            pass
 
 
 class TemporalFusionTransformer:

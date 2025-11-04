@@ -30,6 +30,9 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    tf = None
+    keras = None
+    layers = None
 
 logger = logging.getLogger(__name__)
 
@@ -45,85 +48,95 @@ class StockGraph:
     timestamp: datetime
 
 
-class GraphAttentionLayer(layers.Layer):
-    """
-    Graph Attention Layer - learns importance of neighbors
-
-    GAT: α_ij = softmax_j(LeakyReLU(a^T [W h_i || W h_j]))
-    """
-
-    def __init__(self, units, num_heads=4, **kwargs):
-        super().__init__(**kwargs)
-        self.units = units
-        self.num_heads = num_heads
-        self.units_per_head = units // num_heads
-
-    def build(self, input_shape):
-        self.W = self.add_weight(
-            shape=(input_shape[-1], self.units),
-            initializer='glorot_uniform',
-            name='W'
-        )
-        self.a = self.add_weight(
-            shape=(2 * self.units, self.num_heads),
-            initializer='glorot_uniform',
-            name='a'
-        )
-
-    def call(self, x, adj_matrix):
+if TENSORFLOW_AVAILABLE:
+    class GraphAttentionLayer(layers.Layer):
         """
-        Args:
-            x: [batch, n_nodes, features]
-            adj_matrix: [batch, n_nodes, n_nodes] adjacency matrix
+        Graph Attention Layer - learns importance of neighbors
+
+        GAT: α_ij = softmax_j(LeakyReLU(a^T [W h_i || W h_j]))
         """
-        # Linear transformation
-        Wx = tf.matmul(x, self.W)  # [batch, n_nodes, units]
 
-        # Attention mechanism (simplified for efficiency)
-        # In production, would use proper multi-head attention
-        n_nodes = tf.shape(x)[1]
+        def __init__(self, units, num_heads=4, **kwargs):
+            super().__init__(**kwargs)
+            self.units = units
+            self.num_heads = num_heads
+            self.units_per_head = units // num_heads
 
-        # Self-attention scores
-        attention = tf.nn.softmax(adj_matrix, axis=-1)
+        def build(self, input_shape):
+            self.W = self.add_weight(
+                shape=(input_shape[-1], self.units),
+                initializer='glorot_uniform',
+                name='W'
+            )
+            self.a = self.add_weight(
+                shape=(2 * self.units, self.num_heads),
+                initializer='glorot_uniform',
+                name='a'
+            )
 
-        # Aggregate neighbor features
-        aggregated = tf.matmul(attention, Wx)
+        def call(self, x, adj_matrix):
+            """
+            Args:
+                x: [batch, n_nodes, features]
+                adj_matrix: [batch, n_nodes, n_nodes] adjacency matrix
+            """
+            # Linear transformation
+            Wx = tf.matmul(x, self.W)  # [batch, n_nodes, units]
 
-        return tf.nn.elu(aggregated)
+            # Attention mechanism (simplified for efficiency)
+            # In production, would use proper multi-head attention
+            n_nodes = tf.shape(x)[1]
+
+            # Self-attention scores
+            attention = tf.nn.softmax(adj_matrix, axis=-1)
+
+            # Aggregate neighbor features
+            aggregated = tf.matmul(attention, Wx)
+
+            return tf.nn.elu(aggregated)
+else:
+    class GraphAttentionLayer:
+        def __init__(self, *args, **kwargs):
+            pass
 
 
-class TemporalGraphConvolution(layers.Layer):
-    """Temporal Graph Convolutional layer with evolving graphs"""
+if TENSORFLOW_AVAILABLE:
+    class TemporalGraphConvolution(layers.Layer):
+        """Temporal Graph Convolutional layer with evolving graphs"""
 
-    def __init__(self, units, **kwargs):
-        super().__init__(**kwargs)
-        self.units = units
+        def __init__(self, units, **kwargs):
+            super().__init__(**kwargs)
+            self.units = units
 
-    def build(self, input_shape):
-        self.W = self.add_weight(
-            shape=(input_shape[-1], self.units),
-            initializer='glorot_uniform',
-            name='W'
-        )
+        def build(self, input_shape):
+            self.W = self.add_weight(
+                shape=(input_shape[-1], self.units),
+                initializer='glorot_uniform',
+                name='W'
+            )
 
-    def call(self, x, adj_matrix):
-        """
-        Args:
-            x: Node features [batch, n_nodes, features]
-            adj_matrix: Adjacency [batch, n_nodes, n_nodes]
-        """
-        # Normalize adjacency (add self-loops + degree normalization)
-        adj_norm = adj_matrix + tf.eye(tf.shape(adj_matrix)[1])
-        degree = tf.reduce_sum(adj_norm, axis=-1, keepdims=True)
-        adj_norm = adj_norm / (degree + 1e-6)
+        def call(self, x, adj_matrix):
+            """
+            Args:
+                x: Node features [batch, n_nodes, features]
+                adj_matrix: Adjacency [batch, n_nodes, n_nodes]
+            """
+            # Normalize adjacency (add self-loops + degree normalization)
+            adj_norm = adj_matrix + tf.eye(tf.shape(adj_matrix)[1])
+            degree = tf.reduce_sum(adj_norm, axis=-1, keepdims=True)
+            adj_norm = adj_norm / (degree + 1e-6)
 
-        # Message passing: aggregate neighbor features
-        aggregated = tf.matmul(adj_norm, x)
+            # Message passing: aggregate neighbor features
+            aggregated = tf.matmul(adj_norm, x)
 
-        # Linear transformation
-        output = tf.matmul(aggregated, self.W)
+            # Linear transformation
+            output = tf.matmul(aggregated, self.W)
 
-        return tf.nn.relu(output)
+            return tf.nn.relu(output)
+else:
+    class TemporalGraphConvolution:
+        def __init__(self, *args, **kwargs):
+            pass
 
 
 class StockGNN:
