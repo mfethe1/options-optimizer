@@ -209,6 +209,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize PINN service: {e}")
 
+    # Initialize Ensemble service (Multi-Model Neural Network Ensemble)
+    try:
+        from .ensemble_routes import initialize_ensemble_service
+        await initialize_ensemble_service()
+        logger.info("Ensemble service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Ensemble service: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks and services on application shutdown"""
@@ -469,6 +477,14 @@ try:
     logger.info("PINN routes registered successfully")
 except Exception as e:
     logger.warning(f"Could not register PINN routes: {e}")
+
+# Include Ensemble routes (Multi-Model Neural Network Ensemble)
+try:
+    from .ensemble_routes import router as ensemble_router
+    app.include_router(ensemble_router)
+    logger.info("Ensemble routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Ensemble routes: {e}")
 
 # Initialize coordinator
 coordinator = CoordinatorAgent()

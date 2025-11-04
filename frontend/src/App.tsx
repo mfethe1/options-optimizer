@@ -33,6 +33,7 @@ import EpidemicVolatilityPage from './pages/BioFinancial/EpidemicVolatilityPage'
 import GNNPage from './pages/AdvancedForecasting/GNNPage';
 import MambaPage from './pages/AdvancedForecasting/MambaPage';
 import PINNPage from './pages/AdvancedForecasting/PINNPage';
+import EnsembleAnalysisPage from './pages/EnsembleAnalysisPage';
 import CommandPalette from './components/CommandPalette';
 
 function AppContent() {
@@ -154,6 +155,10 @@ function AppContent() {
             e.preventDefault();
             navigate('/pinn');
             break;
+          case 'e':
+            e.preventDefault();
+            navigate('/ensemble');
+            break;
         }
       }
     };
@@ -199,6 +204,7 @@ function AppContent() {
                 <a href="/gnn" className="text-blue-600 hover:text-blue-800 font-bold">📊 GNN</a>
                 <a href="/mamba" className="text-green-600 hover:text-green-800 font-bold">⚡ Mamba</a>
                 <a href="/pinn" className="text-indigo-600 hover:text-indigo-800 font-bold">🧬 PINN</a>
+                <a href="/ensemble" className="text-amber-600 hover:text-amber-800 font-bold text-lg">🎯 Ensemble</a>
                 <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
                 <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
                 <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
@@ -255,6 +261,7 @@ function AppContent() {
             <Route path="/gnn" element={<GNNPage />} />
             <Route path="/mamba" element={<MambaPage />} />
             <Route path="/pinn" element={<PINNPage />} />
+            <Route path="/ensemble" element={<EnsembleAnalysisPage />} />
             <Route path="/news" element={<NewsFeedPage />} />
             <Route path="/conversational" element={<ConversationalTradingPage />} />
             <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
