@@ -32,6 +32,20 @@
 export { default as TradingViewChart } from './TradingViewChart';
 export { default as CandlestickChart } from './CandlestickChart';
 export { default as MultiTimeframeChart, TRADING_PRESETS } from './MultiTimeframeChart';
+export {
+  default as MLPredictionChart,
+  convertTFTOutput,
+  convertGNNOutput,
+  convertMambaOutput,
+  convertPINNOutput,
+  generateSampleMLPredictions,
+} from './MLPredictionChart';
+export type { MLPrediction, MLPredictionChartProps } from './MLPredictionChart';
+export {
+  default as VIXForecastChart,
+  generateSampleVIXForecast,
+} from './VIXForecastChart';
+export type { VIXForecastData, VIXForecastChartProps } from './VIXForecastChart';
 
 // Types
 export type {
