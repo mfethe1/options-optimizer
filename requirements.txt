@@ -26,7 +26,7 @@ QuantLib-Python==1.32
 # Machine learning
 scikit-learn==1.3.2
 statsmodels==0.14.0
-tensorflow==2.15.0  # For LSTM price prediction
+tensorflow>=2.16.0  # Supports Python 3.9-3.12, required for TFT/GNN/PINN models
 yfinance==0.2.32  # Fallback data provider for ML training
 
 # Task queue

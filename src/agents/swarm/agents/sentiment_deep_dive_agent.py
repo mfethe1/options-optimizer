@@ -534,3 +534,88 @@ class SentimentDeepDiveAgent(BaseSwarmAgent):
             {"symbol": symbol, "controversy": data['controversy']['score']}
             for symbol, data in sorted_symbols[:n]
         ]
+
+    def make_recommendation(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Make recommendations based on sentiment analysis
+
+        Args:
+            analysis: Analysis results from analyze()
+
+        Returns:
+            Recommendations with confidence levels
+        """
+        sentiment_analysis = analysis.get('sentiment_analysis', {})
+        recommendations = []
+
+        for symbol, data in sentiment_analysis.items():
+            signal = data['trading_signal']['signal']
+            confidence = data['trading_signal']['confidence']
+            composite_score = data['composite_score']
+            controversy = data['controversy']['score']
+
+            if signal == 'strong_bullish':
+                recommendations.append({
+                    'action': 'buy_calls',
+                    'symbol': symbol,
+                    'reason': f"Strong bullish sentiment (score: {composite_score:.2f})",
+                    'confidence': confidence,
+                    'strategy': 'Consider call options or reducing put exposure',
+                    'urgency': 'high' if confidence > 0.8 else 'medium'
+                })
+            elif signal == 'strong_bearish':
+                recommendations.append({
+                    'action': 'buy_puts',
+                    'symbol': symbol,
+                    'reason': f"Strong bearish sentiment (score: {composite_score:.2f})",
+                    'confidence': confidence,
+                    'strategy': 'Consider put options or taking profits on calls',
+                    'urgency': 'high' if confidence > 0.8 else 'medium'
+                })
+            elif signal == 'high_volatility':
+                recommendations.append({
+                    'action': 'volatility_trade',
+                    'symbol': symbol,
+                    'reason': f"High controversy detected (score: {controversy:.2f})",
+                    'confidence': confidence,
+                    'strategy': 'Consider straddles, strangles, or selling premium',
+                    'urgency': 'medium'
+                })
+            elif signal == 'bullish':
+                recommendations.append({
+                    'action': 'monitor',
+                    'symbol': symbol,
+                    'reason': f"Bullish sentiment (score: {composite_score:.2f})",
+                    'confidence': confidence,
+                    'strategy': 'Watch for entry points on pullbacks',
+                    'urgency': 'low'
+                })
+            elif signal == 'bearish':
+                recommendations.append({
+                    'action': 'monitor',
+                    'symbol': symbol,
+                    'reason': f"Bearish sentiment (score: {composite_score:.2f})",
+                    'confidence': confidence,
+                    'strategy': 'Watch for short entry points on rallies',
+                    'urgency': 'low'
+                })
+
+        # Sort by urgency and confidence
+        recommendations.sort(
+            key=lambda x: (
+                {'high': 3, 'medium': 2, 'low': 1}.get(x['urgency'], 0),
+                x['confidence']
+            ),
+            reverse=True
+        )
+
+        return {
+            'recommendations': recommendations,
+            'total_recommendations': len(recommendations),
+            'high_urgency_count': len([r for r in recommendations if r['urgency'] == 'high']),
+            'top_bullish': analysis.get('top_bullish', []),
+            'top_bearish': analysis.get('top_bearish', []),
+            'high_controversy': analysis.get('high_controversy', []),
+            'timestamp': datetime.now().isoformat(),
+            'confidence': analysis.get('confidence', 0.75)
+        }

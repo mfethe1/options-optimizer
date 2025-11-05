@@ -6,6 +6,7 @@ Provides access to Schwab trading accounts for live execution.
 from fastapi import APIRouter, HTTPException, Query, Body
 from typing import Optional, Dict, Any, List
 import logging
+import os
 
 from ..integrations.schwab_api import (
     SchwabAPIService,
@@ -13,7 +14,6 @@ from ..integrations.schwab_api import (
     OrderAction,
     OrderDuration
 )
-from ..config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ def get_schwab_service() -> SchwabAPIService:
     global schwab_service
 
     if schwab_service is None:
-        client_id = getattr(settings, 'SCHWAB_CLIENT_ID', None)
-        client_secret = getattr(settings, 'SCHWAB_CLIENT_SECRET', None)
+        client_id = os.getenv('SCHWAB_CLIENT_ID')
+        client_secret = os.getenv('SCHWAB_CLIENT_SECRET')
 
         if not client_id or not client_secret:
             raise HTTPException(

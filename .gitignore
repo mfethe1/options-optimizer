@@ -153,3 +153,8 @@ desktop.ini
 playwright-report/
 test-results/
 
+
+# ML virtual environment
+venv_ml/
+*.pyc
+__pycache__/

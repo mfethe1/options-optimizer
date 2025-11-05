@@ -275,6 +275,65 @@ class RealTimeAnomalyAgent(BaseSwarmAgent):
 
         return None
 
+    def make_recommendation(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Make recommendations based on anomaly analysis
+
+        Args:
+            analysis: Analysis results from analyze()
+
+        Returns:
+            Recommendations with confidence levels
+        """
+        anomalies = analysis.get('anomalies', [])
+        recommendations = []
+
+        for anomaly in anomalies:
+            if anomaly['severity'] == 'critical':
+                # Critical anomalies warrant immediate action
+                if anomaly['type'] == 'volume_spike':
+                    recommendations.append({
+                        'action': 'investigate',
+                        'symbol': anomaly['symbol'],
+                        'reason': f"Critical volume spike detected ({anomaly['multiplier']}x average)",
+                        'urgency': 'high',
+                        'confidence': 0.9
+                    })
+                elif anomaly['type'] == 'iv_expansion':
+                    recommendations.append({
+                        'action': 'consider_volatility_trade',
+                        'symbol': anomaly['symbol'],
+                        'reason': f"Rapid IV expansion to {anomaly['current_iv']}%",
+                        'urgency': 'high',
+                        'confidence': 0.85,
+                        'suggestion': 'Consider selling premium or calendar spreads'
+                    })
+                elif anomaly['type'] == 'price_move':
+                    recommendations.append({
+                        'action': 'review_position',
+                        'symbol': anomaly['symbol'],
+                        'reason': f"Unusual price movement ({anomaly['pct_change']}%)",
+                        'urgency': 'high',
+                        'confidence': 0.9
+                    })
+                elif anomaly['type'] == 'options_flow':
+                    recommendations.append({
+                        'action': 'investigate_flow',
+                        'symbol': anomaly['symbol'],
+                        'reason': f"Unusual options activity ({anomaly['volume_ratio']}x average)",
+                        'urgency': 'high',
+                        'confidence': 0.85,
+                        'suggestion': 'Check flow direction and large trades'
+                    })
+
+        return {
+            'recommendations': recommendations,
+            'total_recommendations': len(recommendations),
+            'high_urgency_count': len([r for r in recommendations if r.get('urgency') == 'high']),
+            'timestamp': datetime.now().isoformat(),
+            'confidence': analysis.get('confidence', 0.9)
+        }
+
     async def update_baseline(self, symbol: str, historical_data: Dict[str, Any]):
         """
         Update historical baseline for anomaly detection

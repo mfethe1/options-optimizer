@@ -29,6 +29,9 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    tf = None
+    keras = None
+    layers = None
     logger.warning("TensorFlow not available - PINN framework will use simplified mode")
 
 

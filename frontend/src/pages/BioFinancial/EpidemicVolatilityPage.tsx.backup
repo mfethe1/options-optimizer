@@ -66,7 +66,6 @@ import {
   HistoricalEpisodes,
   ModelExplanation
 } from '../../api/epidemicVolatilityApi';
-import { VIXForecastChart, generateSampleVIXForecast } from '../../components/charts';
 
 // Regime colors
 const REGIME_COLORS: Record<string, string> = {
@@ -670,18 +669,6 @@ const EpidemicVolatilityPage: React.FC = () => {
               </Card>
             </Grid>
           </Grid>
-
-          {/* VIX Forecast Chart - Professional Visualization */}
-          <Box sx={{ mb: 3 }}>
-            <VIXForecastChart
-              currentVIX={forecast.current_vix}
-              predictedVIX={forecast.predicted_vix}
-              horizonDays={forecast.horizon_days}
-              theme="dark"
-              showMultiTimeframe={false}
-              height={600}
-            />
-          </Box>
 
           {/* Tabs */}
           <Paper>
