@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
@@ -34,7 +34,9 @@ import GNNPage from './pages/AdvancedForecasting/GNNPage';
 import MambaPage from './pages/AdvancedForecasting/MambaPage';
 import PINNPage from './pages/AdvancedForecasting/PINNPage';
 import EnsembleAnalysisPage from './pages/EnsembleAnalysisPage';
+import UnifiedAnalysis from './pages/UnifiedAnalysis';
 import CommandPalette from './components/CommandPalette';
+import NavigationSidebar from './components/NavigationSidebar';
 
 function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -168,76 +170,38 @@ function AppContent() {
   }, [commandPaletteOpen, navigate]);
 
   return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Command Palette */}
-        <CommandPalette
-          isOpen={commandPaletteOpen}
-          onClose={() => setCommandPaletteOpen(false)}
-        />
+    <div className="flex h-screen bg-gray-50">
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
 
-        <nav className="bg-white shadow-sm">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex flex-wrap gap-4">
-              <a href="/" className="text-blue-600 hover:text-blue-800 font-medium">Dashboard</a>
-              <a href="/positions" className="text-blue-600 hover:text-blue-800">Positions</a>
+      {/* Sidebar Navigation */}
+      <NavigationSidebar />
 
-              {/* New Features */}
-              <div className="flex gap-4 border-l border-gray-300 pl-4">
-                <a href="/custom-dashboard" className="text-green-600 hover:text-green-800 font-medium">📊 Dashboard</a>
-                <a href="/options-chain" className="text-green-600 hover:text-green-800 font-medium">⚡ Options Chain</a>
-                <a href="/options-analytics" className="text-green-600 hover:text-green-800 font-medium">📉 Analytics</a>
-                <a href="/risk-dashboard" className="text-green-600 hover:text-green-800 font-medium">🛡️ Risk Dashboard</a>
-                <a href="/calendar" className="text-green-600 hover:text-green-800 font-medium">📅 Calendar</a>
-                <a href="/backtest" className="text-green-600 hover:text-green-800 font-medium">📊 Backtest</a>
-                <a href="/execution" className="text-green-600 hover:text-green-800 font-medium">🎯 Execution</a>
-                <a href="/schwab-connection" className="text-purple-600 hover:text-purple-800 font-bold">🔗 Schwab</a>
-                <a href="/schwab-trading" className="text-purple-600 hover:text-purple-800 font-bold">💰 Trade</a>
-                <a href="/multi-monitor" className="text-indigo-600 hover:text-indigo-800 font-bold">🖥️ Multi-Monitor</a>
-                <a href="/ai-recommendations" className="text-pink-600 hover:text-pink-800 font-bold">🤖 AI Insights</a>
-                <a href="/market-data" className="text-orange-600 hover:text-orange-800 font-bold">⚡ Live Data</a>
-                <a href="/smart-routing" className="text-purple-600 hover:text-purple-800 font-bold">🎯 Smart Routing</a>
-                <a href="/ml-predictions" className="text-pink-600 hover:text-pink-800 font-bold">🧠 ML Predictions</a>
-                <a href="/stress-testing" className="text-red-600 hover:text-red-800 font-bold">🛡️ Stress Testing</a>
-                <a href="/broker-management" className="text-indigo-600 hover:text-indigo-800 font-bold">🔗 Brokers</a>
-                <a href="/epidemic-volatility" className="text-purple-600 hover:text-purple-800 font-bold">🦠 Epidemic Vol</a>
-                <a href="/gnn" className="text-blue-600 hover:text-blue-800 font-bold">📊 GNN</a>
-                <a href="/mamba" className="text-green-600 hover:text-green-800 font-bold">⚡ Mamba</a>
-                <a href="/pinn" className="text-indigo-600 hover:text-indigo-800 font-bold">🧬 PINN</a>
-                <a href="/ensemble" className="text-amber-600 hover:text-amber-800 font-bold text-lg">🎯 Ensemble</a>
-                <a href="/news" className="text-green-600 hover:text-green-800 font-medium">📰 News</a>
-                <a href="/conversational" className="text-green-600 hover:text-green-800 font-medium">💬 Chat</a>
-                <a href="/chart-analysis" className="text-green-600 hover:text-green-800 font-medium">📊 Charts</a>
-                <a href="/anomalies" className="text-green-600 hover:text-green-800 font-medium">🚨 Anomalies</a>
-                <a href="/sentiment" className="text-green-600 hover:text-green-800 font-medium">📈 Sentiment</a>
-                <a href="/paper-trading" className="text-green-600 hover:text-green-800 font-medium">🤖 Paper Trading</a>
-              </div>
-
-              {/* Original Features */}
-              <div className="flex gap-4 border-l border-gray-300 pl-4">
-                <a href="/swarm-analysis" className="text-blue-600 hover:text-blue-800">AI Swarm</a>
-                <a href="/phase4-demo" className="text-blue-600 hover:text-blue-800">Phase 4</a>
-                <a href="/risk-panel-demo" className="text-blue-600 hover:text-blue-800">Risk Panel</a>
-                <a href="/agent-transparency" className="text-blue-600 hover:text-blue-800">Transparency</a>
-              </div>
-              </div>
-
-              {/* Command Palette Button */}
-              <button
-                onClick={() => setCommandPaletteOpen(true)}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
-                title="Command Palette (Ctrl+K)"
-              >
-                <span>⌘</span>
-                <span>K</span>
-              </button>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Header */}
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold text-gray-800">Neural Network Trading System</h2>
             </div>
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 text-sm"
+              title="Command Palette (Ctrl+K)"
+            >
+              <span>⌘K</span>
+            </button>
           </div>
-        </nav>
+        </header>
 
-        <main className="container mx-auto px-4 py-8">
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<UnifiedAnalysis />} />
             <Route path="/positions" element={<PositionsPage />} />
 
             {/* New Feature Routes */}
@@ -276,19 +240,20 @@ function AppContent() {
             <Route path="/agent-transparency" element={<AgentTransparencyDemoPage />} />
           </Routes>
         </main>
-
-        {/* Toast Notifications */}
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-            },
-          }}
-        />
       </div>
+
+      {/* Toast Notifications */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+        }}
+      />
+    </div>
   );
 }
 

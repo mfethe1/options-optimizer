@@ -9,7 +9,6 @@ import {
   Container,
   Typography,
   Paper,
-  Grid,
   Button,
   TextField,
   CircularProgress,
@@ -23,6 +22,7 @@ import {
   TableHead,
   TableRow
 } from '@mui/material';
+import Grid from '@mui/material/Grid2';
 import { Refresh, Timeline, Share } from '@mui/icons-material';
 import { getGNNForecast, getStatus, GNNForecast } from '../../api/gnnApi';
 
@@ -76,7 +76,7 @@ const GNNPage: React.FC = () => {
       {/* Input Section */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <TextField
               fullWidth
               label="Stock Symbols (comma-separated)"
@@ -86,7 +86,7 @@ const GNNPage: React.FC = () => {
               helperText="Enter 2 or more symbols to analyze correlations"
             />
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Button
               fullWidth
               variant="contained"
@@ -119,7 +119,7 @@ const GNNPage: React.FC = () => {
       {forecast && (
         <Grid container spacing={3}>
           {/* Graph Stats */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -164,7 +164,7 @@ const GNNPage: React.FC = () => {
           </Grid>
 
           {/* Predictions */}
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -204,7 +204,7 @@ const GNNPage: React.FC = () => {
           </Grid>
 
           {/* Top Correlations */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -215,7 +215,7 @@ const GNNPage: React.FC = () => {
                 </Typography>
                 <Grid container spacing={2}>
                   {forecast.top_correlations.map((corr, idx) => (
-                    <Grid item xs={12} sm={6} md={4} key={idx}>
+                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={idx}>
                       <Paper sx={{ p: 2, bgcolor: 'grey.100' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                           <Chip label={corr.symbol1} size="small" />
@@ -242,7 +242,7 @@ const GNNPage: React.FC = () => {
           </Grid>
 
           {/* Info */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Alert severity="info">
               <Typography variant="subtitle2" gutterBottom>
                 <strong>How it works:</strong>

@@ -21,6 +21,7 @@ from .models import (
 from .database import get_db, Database
 from .position_routes import router as position_router
 from .auth_routes import router as auth_router
+from .unified_routes import router as unified_router
 from ..agents.coordinator import CoordinatorAgent
 from ..analytics import GreeksCalculator, EVCalculator
 from .rate_limiter import setup_rate_limiting, limiter, custom_limit
@@ -243,6 +244,10 @@ async def shutdown_event():
 # Include authentication routes
 app.include_router(auth_router)
 logger.info("Authentication routes registered successfully")
+
+# Include unified analysis routes
+app.include_router(unified_router)
+logger.info("Unified analysis routes registered successfully")
 
 # Include position management routes
 app.include_router(position_router)
