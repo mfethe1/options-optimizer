@@ -365,7 +365,7 @@ export default function AIRecommendationsPage() {
 
             {/* Path to 20% Monthly Returns */}
             <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-300 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-orange-900 mb-3">💰 Achieving >20% Monthly Returns</h3>
+              <h3 className="text-lg font-semibold text-orange-900 mb-3">💰 Achieving {'>'}20% Monthly Returns</h3>
               <div className="space-y-2 text-sm text-orange-800">
                 <p><strong>✓ FEASIBLE:</strong> 10-15% monthly (very achievable with current capabilities)</p>
                 <p><strong>⚠ AMBITIOUS:</strong> 20% monthly (requires perfect execution + favorable markets)</p>

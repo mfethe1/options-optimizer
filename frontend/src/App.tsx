@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
@@ -36,6 +36,7 @@ import PINNPage from './pages/AdvancedForecasting/PINNPage';
 import EnsembleAnalysisPage from './pages/EnsembleAnalysisPage';
 import ChartsDemo from './pages/ChartsDemo';
 import CommandPalette from './components/CommandPalette';
+import NavigationSidebar from './components/NavigationSidebar';
 
 function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -169,19 +170,15 @@ function AppContent() {
   }, [commandPaletteOpen, navigate]);
 
   return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Command Palette */}
-        <CommandPalette
-          isOpen={commandPaletteOpen}
-          onClose={() => setCommandPaletteOpen(false)}
-        />
+    <div className="flex h-screen bg-gray-50">
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
 
-        <nav className="bg-white shadow-sm">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex flex-wrap gap-4">
-              <a href="/" className="text-blue-600 hover:text-blue-800 font-medium">Dashboard</a>
-              <a href="/positions" className="text-blue-600 hover:text-blue-800">Positions</a>
+      {/* Sidebar Navigation */}
+      <NavigationSidebar />
 
               {/* New Features */}
               <div className="flex gap-4 border-l border-gray-300 pl-4">
@@ -234,12 +231,20 @@ function AppContent() {
                 <span>K</span>
               </button>
             </div>
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 text-sm"
+              title="Command Palette (Ctrl+K)"
+            >
+              <span>⌘K</span>
+            </button>
           </div>
-        </nav>
+        </header>
 
-        <main className="container mx-auto px-4 py-8">
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<UnifiedAnalysis />} />
             <Route path="/positions" element={<PositionsPage />} />
 
             {/* New Feature Routes */}
@@ -279,19 +284,20 @@ function AppContent() {
             <Route path="/agent-transparency" element={<AgentTransparencyDemoPage />} />
           </Routes>
         </main>
-
-        {/* Toast Notifications */}
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-            },
-          }}
-        />
       </div>
+
+      {/* Toast Notifications */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+        }}
+      />
+    </div>
   );
 }
 
