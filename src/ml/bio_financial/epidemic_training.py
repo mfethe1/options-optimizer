@@ -11,17 +11,20 @@ from datetime import datetime
 import logging
 import os
 
+logger = logging.getLogger(__name__)
+
 try:
     import tensorflow as tf
     from tensorflow import keras
     TENSORFLOW_AVAILABLE = True
-except ImportError:
+except Exception as e:
     TENSORFLOW_AVAILABLE = False
+    tf = None
+    keras = None
+    logger.warning(f"TensorFlow import failed in Epidemic training: {e!r}")
 
 from .epidemic_volatility import EpidemicVolatilityModel, SIRModel, SEIRModel
 from .epidemic_data_service import EpidemicDataService
-
-logger = logging.getLogger(__name__)
 
 
 class EpidemicModelTrainer:

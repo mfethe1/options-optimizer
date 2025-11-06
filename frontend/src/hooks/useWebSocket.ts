@@ -4,8 +4,7 @@
 import { useRef, useCallback } from 'react';
 import { useStore } from '../store';
 import toast from 'react-hot-toast';
-
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
+import { buildWsUrl } from '../config/api.config';
 
 export const useWebSocket = () => {
   const wsRef = useRef<WebSocket | null>(null);
@@ -24,7 +23,9 @@ export const useWebSocket = () => {
       return;
     }
 
-    const ws = new WebSocket(`${WS_URL}/${userId}`);
+    const wsUrl = buildWsUrl(`ws/${userId}`);
+    console.log('[useWebSocket] Connecting to:', wsUrl);
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log('WebSocket connected');

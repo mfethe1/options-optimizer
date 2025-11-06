@@ -1,0 +1,1 @@
+{ symbols:[AAPL,MSFT,GOOGL],lookback_days:60,epochs:2,batch_size:16}

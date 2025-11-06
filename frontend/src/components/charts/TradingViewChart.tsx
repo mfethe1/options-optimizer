@@ -10,10 +10,9 @@ import {
   createChart,
   IChartApi,
   ISeriesApi,
-  CandlestickData,
-  LineData,
-  HistogramData,
-  Time,
+  CandlestickSeries,
+  HistogramSeries,
+  LineSeries,
 } from 'lightweight-charts';
 import {
   TradingViewChartConfig,
@@ -21,6 +20,7 @@ import {
   ChartTheme,
   LineSeriesConfig,
   IndicatorConfig,
+  PredictionSeriesConfig,
 } from './chartTypes';
 import {
   DARK_THEME,
@@ -35,6 +35,7 @@ interface TradingViewChartProps {
   config: TradingViewChartConfig;
   data: OHLCVData[];
   indicators?: IndicatorConfig[];
+  predictionSeries?: PredictionSeriesConfig[];
   onCrosshairMove?: (data: any) => void;
   onVisibleRangeChange?: (range: any) => void;
   className?: string;
@@ -71,15 +72,17 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   config,
   data,
   indicators = [],
+  predictionSeries = [],
   onCrosshairMove,
   onVisibleRangeChange,
   className = '',
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const indicatorSeriesRefs = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  const candlestickSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const indicatorSeriesRefs = useRef<Map<string, ISeriesApi<any>>>(new Map());
+  const predictionSeriesRefs = useRef<Map<string, ISeriesApi<any>>>(new Map());
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -126,8 +129,8 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
     chartRef.current = chart;
 
-    // Create candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    // Create candlestick series (v5 API)
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: CANDLESTICK_COLORS.upColor,
       downColor: CANDLESTICK_COLORS.downColor,
       borderUpColor: CANDLESTICK_COLORS.borderUpColor,
@@ -136,11 +139,11 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       wickDownColor: CANDLESTICK_COLORS.wickDownColor,
     });
 
-    candlestickSeriesRef.current = candlestickSeries;
+    candlestickSeriesRef.current = candlestickSeries as unknown as ISeriesApi<any>;
 
     // Create volume series if enabled
     if (config.showVolume) {
-      const volumeSeries = chart.addHistogramSeries({
+      const volumeSeries = chart.addSeries(HistogramSeries, {
         priceFormat: {
           type: 'volume',
         },
@@ -151,7 +154,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         },
       });
 
-      volumeSeriesRef.current = volumeSeries;
+      volumeSeriesRef.current = volumeSeries as unknown as ISeriesApi<any>;
     }
 
     // Set up event handlers
@@ -178,6 +181,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       candlestickSeriesRef.current = null;
       volumeSeriesRef.current = null;
       indicatorSeriesRefs.current.clear();
+      predictionSeriesRefs.current.clear();
     };
   }, [config.symbol, config.theme, config.showVolume, config.width, config.height]);
 
@@ -248,7 +252,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     indicators.forEach((indicator) => {
       if (!chartRef.current) return;
 
-      const lineSeries = chartRef.current.addLineSeries({
+      const lineSeries = chartRef.current.addSeries(LineSeries, {
         color: indicator.color || '#2196f3',
         lineWidth: indicator.lineWidth || 2,
         title: `${indicator.type.toUpperCase()}(${indicator.period || ''})`,
@@ -260,6 +264,50 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       // For now, this is just the series setup
     });
   }, [indicators, isInitialized]);
+
+  /**
+   * Update prediction series overlays
+   */
+  useEffect(() => {
+    if (!isInitialized || !chartRef.current) return;
+
+    // Remove old prediction series
+    predictionSeriesRefs.current.forEach((series) => {
+      if (chartRef.current) {
+        chartRef.current.removeSeries(series);
+      }
+    });
+    predictionSeriesRefs.current.clear();
+
+    // Add new prediction series
+    predictionSeries
+      .filter((pred) => pred.visible !== false) // Only show visible predictions
+      .forEach((prediction) => {
+        if (!chartRef.current || !prediction.data || prediction.data.length === 0) return;
+
+        // Determine line style
+        let lineStyle = 0; // Solid
+        if (prediction.lineStyle === 'dashed') {
+          lineStyle = 2;
+        } else if (prediction.lineStyle === 'dotted') {
+          lineStyle = 3;
+        }
+
+        const lineSeries = chartRef.current.addSeries(LineSeries, {
+          color: prediction.color,
+          lineWidth: prediction.lineWidth || 2,
+          lineStyle: lineStyle,
+          title: prediction.name,
+          priceLineVisible: false,
+          lastValueVisible: true,
+        });
+
+        // Set the prediction data
+        lineSeries.setData(prediction.data);
+
+        predictionSeriesRefs.current.set(prediction.id, lineSeries);
+      });
+  }, [predictionSeries, isInitialized]);
 
   return (
     <div

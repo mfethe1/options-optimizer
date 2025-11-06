@@ -45,6 +45,17 @@ class GNNForecastResponse(BaseModel):
     graph_stats: Dict
     top_correlations: List[Dict]
 
+class GNNTrainRequest(BaseModel):
+    symbols: List[str]
+    lookback_days: int = 60
+    epochs: int = 10
+    batch_size: int = 32
+
+class GNNTrainResponse(BaseModel):
+    status: str
+    message: str
+    results: Dict
+
 
 async def initialize_gnn_service():
     """Initialize GNN service"""
@@ -74,6 +85,7 @@ async def get_status():
         'predictor_ready': gnn_predictor is not None,
         'graph_builder_ready': graph_builder is not None,
         'model': 'Graph Neural Network (Temporal GAT)',
+        'num_symbols': (len(gnn_predictor.symbols) if gnn_predictor else 0),
         'features': [
             'Dynamic correlation graphs',
             'Multi-stock prediction',
@@ -92,7 +104,15 @@ async def get_gnn_forecast(request: GNNForecastRequest):
     Uses graph neural networks to leverage stock correlations
     for improved predictions.
     """
-    if gnn_predictor is None or graph_builder is None:
+    # Ensure predictor matches requested symbols
+    global gnn_predictor
+    if gnn_predictor is None or set(gnn_predictor.symbols) != set(request.symbols):
+        try:
+            gnn_predictor = GNNPredictor(symbols=request.symbols)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"GNN initialization failed: {e}")
+
+    if graph_builder is None:
         raise HTTPException(status_code=503, detail="GNN service not initialized")
 
     try:
@@ -168,6 +188,7 @@ async def get_gnn_forecast(request: GNNForecastRequest):
         return GNNForecastResponse(
             timestamp=datetime.now().isoformat(),
             symbols=graph.symbols,
+
             predictions=predictions,
             correlations=corr_dict,
             graph_stats={
@@ -178,10 +199,67 @@ async def get_gnn_forecast(request: GNNForecastRequest):
             },
             top_correlations=top_corr
         )
-
     except Exception as e:
         logger.error(f"Error generating GNN forecast: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/gnn/train", response_model=GNNTrainResponse)
+async def train_gnn(request: GNNTrainRequest):
+    """Train GNN on recent correlation snapshot and persist weights"""
+    global gnn_predictor, graph_builder
+
+    # Ensure predictor matches requested symbols
+    global gnn_predictor
+    if gnn_predictor is None or set(gnn_predictor.symbols) != set(request.symbols):
+        gnn_predictor = GNNPredictor(symbols=request.symbols)
+
+    if graph_builder is None:
+        # Try to initialize again (may fail if TensorFlow unavailable)
+        await initialize_gnn_service()
+        if graph_builder is None:
+            raise HTTPException(status_code=503, detail="GNN service not initialized (TensorFlow may be unavailable)")
+
+    try:
+        import yfinance as yf
+        price_data = {}
+        features = {}
+
+        for symbol in request.symbols:
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period=f"{request.lookback_days + 30}d")
+                if len(hist) < request.lookback_days:
+                    continue
+                price_data[symbol] = hist['Close'].values[-request.lookback_days:]
+                returns = np.diff(hist['Close'].values) / hist['Close'].values[:-1]
+                feature_vector = np.concatenate([
+                    hist['Close'].values[-60:],
+                    returns[-60:] if len(returns) >= 60 else np.zeros(60)
+                ])
+                if len(feature_vector) < 60:
+                    feature_vector = np.pad(feature_vector, (0, 60 - len(feature_vector)))
+                else:
+                    feature_vector = feature_vector[:60]
+                features[symbol] = feature_vector
+            except Exception:
+                continue
+
+        if len(price_data) < 2:
+            raise HTTPException(status_code=400, detail="Insufficient valid symbols for training")
+
+        results = await gnn_predictor.train(
+            price_data=price_data,
+            features=features,
+            epochs=request.epochs,
+            batch_size=request.batch_size
+        )
+        return GNNTrainResponse(status="success", message="GNN trained and weights saved", results=results)
+
+    except Exception as e:
+        logger.error(f"Error training GNN: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.get("/gnn/graph/{symbols}")

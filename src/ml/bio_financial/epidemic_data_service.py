@@ -131,42 +131,111 @@ class EpidemicDataService:
             spx_ticker = yf.Ticker("^GSPC")
             spx_data = spx_ticker.history(start=start_date, end=end_date)
 
+            # Fallback: if date-range fetch fails (common for indices), try period-based fetch
             if len(vix_data) == 0 or len(spx_data) == 0:
-                logger.warning("No historical data available")
+                logger.warning("Primary date-range fetch returned empty; trying 5y period fallback for VIX and GSPC")
+                vix_data = vix_ticker.history(period="5y")
+                spx_data = spx_ticker.history(period="5y")
+
+            if len(vix_data) == 0 or len(spx_data) == 0:
+                logger.warning("No historical data available after fallback")
                 return pd.DataFrame()
 
-            # Merge on date
-            df = pd.DataFrame(index=vix_data.index)
-            df['vix'] = vix_data['Close']
-            df['spx_close'] = spx_data['Close']
-            df['volume'] = spx_data['Volume']
+            logger.info(f"VIX cols: {list(vix_data.columns)}; SPX cols: {list(spx_data.columns)}; lens: vix={len(vix_data)}, spx={len(spx_data)}")
 
-            # Calculate realized volatility (20-day rolling)
-            df['spx_return'] = df['spx_close'].pct_change()
-            df['realized_vol_20d'] = df['spx_return'].rolling(20).std() * np.sqrt(252) * 100
+            # Align indices (remove timezone and intersect dates)
+            try:
+                vix_idx = pd.DatetimeIndex(vix_data.index)
+                if getattr(vix_idx, 'tz', None) is not None:
+                    vix_idx = vix_idx.tz_localize(None)
+                vix_idx = vix_idx.normalize()
+            except Exception:
+                vix_idx = pd.DatetimeIndex(vix_data.index).normalize()
+            try:
+                spx_idx = pd.DatetimeIndex(spx_data.index)
+                if getattr(spx_idx, 'tz', None) is not None:
+                    spx_idx = spx_idx.tz_localize(None)
+                spx_idx = spx_idx.normalize()
+            except Exception:
+                spx_idx = pd.DatetimeIndex(spx_data.index).normalize()
+            common_idx = vix_idx.intersection(spx_idx)
+            if len(common_idx) == 0:
+                logger.warning("VIX/GSPC index intersection empty after tz normalization")
+                return pd.DataFrame()
 
-            # Calculate realized volatility (5-day rolling)
-            df['realized_vol_5d'] = df['spx_return'].rolling(5).std() * np.sqrt(252) * 100
+            # Normalize DataFrame indices to match common_idx timezone-naive values
+            vix_data = vix_data.copy(); vix_data.index = vix_idx
+            spx_data = spx_data.copy(); spx_data.index = spx_idx
 
-            # Volume ratio (vs 20-day average)
+            # Build aligned DataFrame by joining on normalized date index
+            # Normalize column casing just in case
+            vix_cols = {c.lower(): c for c in vix_data.columns}
+            spx_cols = {c.lower(): c for c in spx_data.columns}
+            vix_close_col = vix_cols.get('close', next(iter(vix_data.columns)))
+            spx_close_col = spx_cols.get('close', next(iter(spx_data.columns)))
+            vol_col = spx_cols.get('volume', None)
+
+            vix_series = vix_data[[vix_close_col]].rename(columns={vix_close_col: 'vix'})
+            spx_series = spx_data[[spx_close_col]].rename(columns={spx_close_col: 'spx_close'})
+            df = vix_series.join(spx_series, how='inner')
+
+            # Ensure numeric types
+            df['vix'] = pd.to_numeric(df['vix'], errors='coerce')
+            df['spx_close'] = pd.to_numeric(df['spx_close'], errors='coerce')
+
+            # Volume may be missing for indices; handle gracefully
+            if vol_col is not None and vol_col in spx_data.columns:
+                # align volume to df's index (result of inner join)
+                df['volume'] = spx_data[vol_col].reindex(df.index)
+            else:
+                df['volume'] = 0.0
+                logger.warning("SPX 'Volume' column missing; defaulting volume to 0.0")
+
+            # Calculate realized volatility
+            df['spx_return'] = df['spx_close'].pct_change(fill_method=None)
+            df['realized_vol_20d'] = df['spx_return'].rolling(window=20, min_periods=20).std() * np.sqrt(252) * 100
+            df['realized_vol_5d'] = df['spx_return'].rolling(window=5, min_periods=5).std() * np.sqrt(252) * 100
+
+            # Volume ratio (vs 20-day average) with safe defaults
             df['volume_avg_20d'] = df['volume'].rolling(20).mean()
             df['volume_ratio'] = df['volume'] / df['volume_avg_20d']
+            df['volume_ratio'] = df['volume_ratio'].fillna(1.0).clip(lower=0.0)
 
             # Sentiment from VIX
             df['sentiment'] = df['vix'].apply(self._vix_to_sentiment)
 
             # Detect Fed events (simplified - check for VIX spikes)
-            df['vix_change'] = df['vix'].pct_change()
+            df['vix_change'] = df['vix'].pct_change(fill_method=None)
             df['is_fed_event'] = (df['vix_change'].abs() > 0.15)  # 15%+ VIX change
 
             # Earnings season (rough approximation - Jan, Apr, Jul, Oct)
             df['month'] = df.index.month
             df['is_earnings_season'] = df['month'].isin([1, 4, 7, 10])
 
-            # Drop NaN rows
-            df = df.dropna()
+            # Remove warmup rows and fill remaining non-critical NaNs
+            df = df.iloc[30:].copy()
+            for col in ['realized_vol_20d', 'realized_vol_5d']:
+                df[col] = df[col].ffill().bfill()
+            df['is_fed_event'] = df['is_fed_event'].fillna(False).astype(bool)
 
-            logger.info(f"Collected {len(df)} days of historical epidemic data")
+            # Debug NaN counts before dropping
+            nan_counts = df.isna().sum().to_dict()
+            logger.info(f"NaN counts before filtering: {nan_counts}")
+
+            # Drop NaN rows on essential columns only
+            df = df.dropna(subset=['vix', 'spx_close', 'realized_vol_20d', 'realized_vol_5d', 'sentiment'])
+
+            # If still empty, relax criteria to only price columns and recompute realized vols later
+            if len(df) == 0:
+                logger.warning("All rows dropped with strict subset; relaxing to ['vix','spx_close'] and slicing off warmup period")
+                df = pd.DataFrame(index=common_idx)
+                df['vix'] = pd.to_numeric(vix_data[vix_close_col].reindex(common_idx), errors='coerce')
+                df['spx_close'] = pd.to_numeric(spx_data[spx_close_col].reindex(common_idx), errors='coerce')
+                df = df.dropna(subset=['vix', 'spx_close'])
+                # Warmup removal to avoid NaNs in rolling stats
+                df = df.iloc[30:]
+
+            logger.info(f"Collected {len(df)} days of historical epidemic data (vix={len(vix_data)}, spx={len(spx_data)}, common={len(common_idx)})")
             return df
 
         except Exception as e:

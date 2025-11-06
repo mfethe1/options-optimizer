@@ -51,7 +51,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.BASE_URL || 'http://localhost:5173',
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
     
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -120,19 +120,23 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'cd frontend && npm run dev',
-      url: 'http://localhost:5173',
-      reuseExistingServer: !process.env.CI,
+      command: 'cd frontend && npm run dev -- --port 3010',
+      url: 'http://localhost:3010',
+      reuseExistingServer: false,
       timeout: 120000,
       stdout: 'ignore',
       stderr: 'pipe',
+      env: {
+        VITE_API_URL: 'http://127.0.0.1:8017'
+      }
     },
     {
-      command: 'uvicorn src.api.main:app --reload',
-      url: 'http://localhost:8000/api/health',
-      reuseExistingServer: !process.env.CI,
+      // Dedicated backend for ML tests; do not reuse to avoid port collisions with other services
+      command: 'python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8017',
+      url: 'http://127.0.0.1:8017/health',
+      reuseExistingServer: true,
       timeout: 120000,
-      stdout: 'ignore',
+      stdout: 'pipe',
       stderr: 'pipe',
     },
   ],

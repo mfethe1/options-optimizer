@@ -17,7 +17,7 @@ Based on research:
 
 import numpy as np
 import pandas as pd
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from dataclasses import dataclass
 from datetime import datetime
 import logging

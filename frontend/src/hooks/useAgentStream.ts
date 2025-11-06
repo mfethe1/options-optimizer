@@ -157,12 +157,15 @@ export interface UseAgentStreamReturn {
  * @returns Agent stream state and control functions
  */
 export function useAgentStream(options: UseAgentStreamOptions): UseAgentStreamReturn {
+  // Import API config for dynamic WebSocket URL
+  const { buildWsUrl } = require('../config/api.config');
+
   const {
     userId,
     autoConnect = true,
     reconnectInterval = 3000,
     maxReconnectAttempts = 10,
-    wsUrl = `ws://localhost:8000/ws/agent-stream/${userId}`,
+    wsUrl = buildWsUrl(`ws/agent-stream/${userId}`),
   } = options;
 
   const wsRef = useRef<WebSocket | null>(null);

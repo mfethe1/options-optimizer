@@ -1,6 +1,15 @@
 """
 FastAPI Main Application
 """
+# Preload TensorFlow as the very first import to avoid Windows DLL init conflicts
+try:
+    import tensorflow as tf  # type: ignore  # noqa: F401
+    _TF_PRELOADED = True
+except Exception as _e:  # pragma: no cover
+    _TF_PRELOADED = False
+    _TF_PRELOAD_ERR = repr(_e)
+
+
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -125,50 +134,55 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize data aggregator: {e}")
 
-    # Initialize smart order router
-    try:
-        from .market_data_routes import data_aggregator
-        from .smart_routing_routes import initialize_smart_router
-        from ..integrations.schwab_api import SchwabAPIService
+    # Initialize smart order router - TEMPORARILY DISABLED TO FIX STARTUP BLOCKING
+    # try:
+    #     from .market_data_routes import data_aggregator
+    #     from .smart_routing_routes import initialize_smart_router
+    #     from ..integrations.schwab_api import SchwabAPIService
 
-        # Initialize Schwab API for order execution
-        schwab_api = SchwabAPIService(
-            client_id=os.getenv("SCHWAB_CLIENT_ID", ""),
-            client_secret=os.getenv("SCHWAB_CLIENT_SECRET", ""),
-            redirect_uri=os.getenv("SCHWAB_REDIRECT_URI", "https://localhost:8000/callback")
-        )
+    #     # Initialize Schwab API for order execution
+    #     schwab_api = SchwabAPIService(
+    #         client_id=os.getenv("SCHWAB_CLIENT_ID", ""),
+    #         client_secret=os.getenv("SCHWAB_CLIENT_SECRET", ""),
+    #         redirect_uri=os.getenv("SCHWAB_REDIRECT_URI", "https://localhost:8000/callback")
+    #     )
 
-        if data_aggregator:
-            await initialize_smart_router(data_aggregator, schwab_api)
-            logger.info("Smart order router initialized successfully")
-        else:
-            logger.warning("Data aggregator not available - smart router not initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize smart router: {e}")
+    #     if data_aggregator:
+    #         await initialize_smart_router(data_aggregator, schwab_api)
+    #         logger.info("Smart order router initialized successfully")
+    #     else:
+    #         logger.warning("Data aggregator not available - smart router not initialized")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize smart router: {e}")
+    logger.info("Smart router initialization skipped (disabled for debugging)")
 
-    # Initialize ML prediction service
-    try:
-        from .ml_prediction_routes import initialize_ml_service
-        await initialize_ml_service()
-        logger.info("ML prediction service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize ML service: {e}")
+    # TEMPORARILY DISABLED ALL ML SERVICE INITIALIZATIONS TO FIX STARTUP BLOCKING
+    # These services will initialize on-demand when first accessed
+    logger.info("ML service initializations skipped (will initialize on-demand)")
 
-    # Initialize stress testing engine
-    try:
-        from .stress_testing_routes import initialize_stress_engine
-        await initialize_stress_engine()
-        logger.info("Stress testing engine initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize stress testing engine: {e}")
+    # # Initialize ML prediction service
+    # try:
+    #     from .ml_prediction_routes import initialize_ml_service
+    #     await initialize_ml_service()
+    #     logger.info("ML prediction service initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize ML service: {e}")
 
-    # Initialize broker manager
-    try:
-        from .broker_routes import initialize_broker_manager
-        await initialize_broker_manager()
-        logger.info("Broker manager initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize broker manager: {e}")
+    # # Initialize stress testing engine
+    # try:
+    #     from .stress_testing_routes import initialize_stress_engine
+    #     await initialize_stress_engine()
+    #     logger.info("Stress testing engine initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize stress testing engine: {e}")
+
+    # # Initialize broker manager
+    # try:
+    #     from .broker_routes import initialize_broker_manager
+    #     await initialize_broker_manager()
+    #     logger.info("Broker manager initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize broker manager: {e}")
 
     # Initialize epidemic volatility service
     try:
@@ -490,6 +504,41 @@ try:
     logger.info("Ensemble routes registered successfully")
 except Exception as e:
     logger.warning(f"Could not register Ensemble routes: {e}")
+# Include Model Management routes (Unified models/status)
+try:
+    from .model_management_routes import router as model_mgmt_router
+    app.include_router(model_mgmt_router)
+    logger.info("Model Management routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Model Management routes: {e}")
+
+# Debug: TensorFlow import status inside API process
+@app.get("/debug/tf")
+def debug_tf():
+    import sys, os, traceback, platform
+    info = {
+        "python": sys.version,
+        "executable": sys.executable,
+        "platform": platform.platform(),
+        "path_head": sys.path[:5],
+        "env_PATH": os.environ.get("PATH", "")[:1024],
+    }
+    try:
+        import numpy as np
+        info["numpy_version"] = getattr(np, "__version__", None)
+    except Exception:
+        info["numpy_version"] = None
+    try:
+        import tensorflow as tf
+        info["tf_version"] = getattr(tf, "__version__", None)
+        info["tf_file"] = getattr(tf, "__file__", None)
+        return {"ok": True, **info}
+    except Exception as e:
+        info["error"] = repr(e)
+        info["traceback"] = traceback.format_exc()
+        return {"ok": False, **info}
+
+
 
 # Initialize coordinator
 coordinator = CoordinatorAgent()
@@ -498,14 +547,14 @@ coordinator = CoordinatorAgent()
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-    
+
     async def broadcast(self, message: dict):
         for connection in self.active_connections:
             try:
@@ -730,13 +779,13 @@ async def create_position(
     """Create a new position."""
     try:
         created_position = await db.create_position(position)
-        
+
         # Broadcast update
         await manager.broadcast({
             "type": "position_created",
             "data": created_position
         })
-        
+
         return created_position
     except Exception as e:
         logger.error(f"Error creating position: {e}")
@@ -785,13 +834,13 @@ async def update_position(
     """Update a position."""
     try:
         updated_position = await db.update_position(position_id, position_update)
-        
+
         # Broadcast update
         await manager.broadcast({
             "type": "position_updated",
             "data": updated_position
         })
-        
+
         return updated_position
     except Exception as e:
         logger.error(f"Error updating position: {e}")
@@ -806,13 +855,13 @@ async def delete_position(
     """Delete a position."""
     try:
         await db.delete_position(position_id)
-        
+
         # Broadcast update
         await manager.broadcast({
             "type": "position_deleted",
             "data": {"position_id": position_id}
         })
-        
+
         return {"message": "Position deleted successfully"}
     except Exception as e:
         logger.error(f"Error deleting position: {e}")
@@ -830,20 +879,20 @@ async def calculate_greeks(
         position = await db.get_position(position_id)
         if not position:
             raise HTTPException(status_code=404, detail="Position not found")
-        
+
         # Get market data
         market_data = await db.get_market_data(position['symbol'])
-        
+
         # Calculate Greeks
         calculator = GreeksCalculator()
         portfolio_greeks = calculator.calculate_portfolio_greeks(
             [position],
             {position['symbol']: market_data}
         )
-        
+
         # Save to database
         await db.save_greeks(position_id, portfolio_greeks)
-        
+
         return {
             "position_id": position_id,
             "greeks": portfolio_greeks,
@@ -866,17 +915,17 @@ async def calculate_ev(
         position = await db.get_position(position_id)
         if not position:
             raise HTTPException(status_code=404, detail="Position not found")
-        
+
         # Get market data
         market_data = await db.get_market_data(position['symbol'])
-        
+
         # Calculate EV
         calculator = EVCalculator()
         ev_result = calculator.calculate_ev(position, market_data)
-        
+
         # Save to database
         await db.save_ev(position_id, ev_result)
-        
+
         return {
             "position_id": position_id,
             "expected_value": ev_result.expected_value,
@@ -903,23 +952,23 @@ async def run_analysis(
     try:
         # Get positions
         positions = await db.get_positions(request.user_id, "open")
-        
+
         # Get market data for all symbols
         symbols = list(set(p['symbol'] for p in positions))
         market_data = {}
         for symbol in symbols:
             market_data[symbol] = await db.get_market_data(symbol)
-        
+
         # Calculate portfolio Greeks
         calculator = GreeksCalculator()
         portfolio_greeks = calculator.calculate_portfolio_greeks(
             positions,
             market_data
         )
-        
+
         # Get user preferences
         user_prefs = await db.get_user_preferences(request.user_id)
-        
+
         # Run coordinator
         result = coordinator.run_analysis(
             positions=positions,
@@ -928,10 +977,10 @@ async def run_analysis(
             user_preferences=user_prefs,
             report_type=request.report_type
         )
-        
+
         # Save report
         await db.save_report(request.user_id, result['report'])
-        
+
         # Broadcast update
         await manager.broadcast({
             "type": "analysis_completed",
@@ -941,7 +990,7 @@ async def run_analysis(
                 "timestamp": datetime.now().isoformat()
             }
         })
-        
+
         return {
             "status": result['workflow_status'],
             "report": result['report'],
@@ -1018,37 +1067,37 @@ async def run_scheduled_task(
 ):
     """
     Run scheduled analysis task.
-    
+
     schedule_type: pre_market, market_open, mid_day, end_of_day
     """
     try:
         # Get all active users
         users = await db.get_active_users()
-        
+
         results = []
         for user in users:
             # Get positions
             positions = await db.get_positions(user['id'], "open")
-            
+
             if not positions:
                 continue
-            
+
             # Get market data
             symbols = list(set(p['symbol'] for p in positions))
             market_data = {}
             for symbol in symbols:
                 market_data[symbol] = await db.get_market_data(symbol)
-            
+
             # Calculate Greeks
             calculator = GreeksCalculator()
             portfolio_greeks = calculator.calculate_portfolio_greeks(
                 positions,
                 market_data
             )
-            
+
             # Get user preferences
             user_prefs = await db.get_user_preferences(user['id'])
-            
+
             # Run scheduled analysis
             result = coordinator.run_scheduled_analysis(
                 schedule_type=schedule_type,
@@ -1057,15 +1106,15 @@ async def run_scheduled_task(
                 portfolio_greeks=portfolio_greeks,
                 user_preferences=user_prefs
             )
-            
+
             # Save report
             await db.save_report(user['id'], result['report'])
-            
+
             results.append({
                 "user_id": user['id'],
                 "status": result['workflow_status']
             })
-        
+
         return {
             "schedule_type": schedule_type,
             "users_processed": len(results),

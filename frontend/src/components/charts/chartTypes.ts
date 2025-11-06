@@ -105,9 +105,24 @@ export interface ChartTheme {
  * Technical indicator configuration
  */
 export interface IndicatorConfig {
-  type: 'SMA' | 'EMA' | 'RSI' | 'MACD' | 'BOLLINGER';
-  period: number;
+  id?: string;
+  type: string;
+  period?: number;
   color?: string;
+  lineWidth?: number;
+  visible?: boolean;
+}
+
+/**
+ * Prediction line series configuration with data
+ */
+export interface PredictionSeriesConfig {
+  id: string;
+  name: string;
+  color: string;
+  lineWidth?: number;
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+  data: LineData[];
   visible?: boolean;
 }
 

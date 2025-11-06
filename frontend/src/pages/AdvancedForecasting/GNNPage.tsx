@@ -20,9 +20,9 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TableRow
+  TableRow,
+  Grid
 } from '@mui/material';
-import Grid from '@mui/material/Grid2';
 import { Refresh, Timeline, Share } from '@mui/icons-material';
 import { getGNNForecast, getStatus, GNNForecast } from '../../api/gnnApi';
 import { GNNNetworkChart, GNNNetworkData, GNNNode, GNNEdge } from '../../components/charts';

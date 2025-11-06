@@ -5,13 +5,36 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 4001,
+    strictPort: true, // Fail if port is already in use
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:9001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        ws: true, // Enable WebSocket proxying
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Proxying:', req.method, req.url, '→', proxyReq.path);
+          });
+        },
+      },
+      // WebSocket proxy for agent streaming
+      '/ws': {
+        target: 'ws://127.0.0.1:9001',
+        ws: true,
         changeOrigin: true,
       },
     },
+  },
+  define: {
+    // Make API URL available at build time
+    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
+      process.env.VITE_API_BASE_URL || 'http://127.0.0.1:9001'
+    ),
   },
 })
 

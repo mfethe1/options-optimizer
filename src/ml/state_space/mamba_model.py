@@ -28,9 +28,9 @@ try:
     from tensorflow import keras
     from tensorflow.keras import layers
     TENSORFLOW_AVAILABLE = True
-except ImportError:
+except Exception as e:
     TENSORFLOW_AVAILABLE = False
-    logger.warning("TensorFlow not available - Mamba model will use simplified mode")
+    logger.warning(f"TensorFlow import failed for Mamba: {e!r}")
 
 
 @dataclass
@@ -121,39 +121,32 @@ class SelectiveSSM(layers.Layer if TENSORFLOW_AVAILABLE else object):
             return x
 
         batch_size = tf.shape(x)[0]
-        seq_len = tf.shape(x)[1]
-
         # Selective parameters (input-dependent)
         B = tf.matmul(x, self.W_B)  # [batch, seq_len, d_state]
         C = tf.matmul(x, self.W_C)  # [batch, seq_len, d_state]
         delta = tf.nn.softplus(tf.matmul(x, self.W_delta))  # [batch, seq_len, 1]
 
-        # Initialize hidden state
-        h = tf.zeros((batch_size, self.d_state))  # [batch, d_state]
+        # Transpose to time-major for scan: [seq_len, batch, ...]
+        x_T = tf.transpose(x, [1, 0, 2])
+        B_T = tf.transpose(B, [1, 0, 2])
+        C_T = tf.transpose(C, [1, 0, 2])
+        delta_T = tf.transpose(delta, [1, 0, 2])
 
-        # Output sequence
-        outputs = []
+        def scan_step(h_prev, elems):
+            x_t, B_t, delta_t = elems  # shapes: [batch, d_model], [batch, d_state], [batch, 1]
+            # Discretized state space update (simplified)
+            h_next = (1.0 - delta_t) * tf.matmul(h_prev, self.A, transpose_b=True) \
+                     + delta_t * B_t * tf.expand_dims(x_t[:, 0], -1)
+            return h_next
 
-        # Recurrent processing
-        for t in range(seq_len):
-            x_t = x[:, t, :]  # [batch, d_model]
-            B_t = B[:, t, :]  # [batch, d_state]
-            C_t = C[:, t, :]  # [batch, d_state]
-            delta_t = delta[:, t, :]  # [batch, 1]
+        # Initialize hidden state and run scan over time to get hidden states per time
+        h0 = tf.zeros((batch_size, self.d_state))  # [batch, d_state]
+        H_T = tf.scan(fn=scan_step, elems=(x_T, B_T, delta_T), initializer=h0)  # [seq_len, batch, d_state]
 
-            # Discretized state space
-            # h(t) = A_bar h(t-1) + B_bar x(t)
-            # where A_bar = exp(Δ * A), B_bar = Δ * B
-
-            # Simplified: h(t) = (1 - Δ) * A * h(t-1) + Δ * B * x(t)
-            h = (1 - delta_t) * tf.matmul(h, self.A, transpose_b=True) + delta_t * B_t * tf.expand_dims(x_t[:, 0], -1)
-
-            # Output: y(t) = C(t) * h(t) + D * x(t)
-            y_t = tf.reduce_sum(C_t * h, axis=-1, keepdims=True) + self.D[0] * x_t[:, 0:1]
-            outputs.append(y_t)
-
-        # Stack outputs
-        y = tf.stack(outputs, axis=1)  # [batch, seq_len, 1]
+        # Compute outputs from hidden states
+        y_T = tf.reduce_sum(C_T * H_T, axis=-1, keepdims=True) + self.D[0] * x_T[:, :, 0:1]  # [seq_len, batch, 1]
+        # y_T -> [batch, seq_len, 1]
+        y = tf.transpose(y_T, [1, 0, 2])
 
         # Expand to d_model dimensions
         y = tf.tile(y, [1, 1, self.d_model])
@@ -318,6 +311,23 @@ class MambaPredictor:
         if TENSORFLOW_AVAILABLE:
             self.model = MambaModel(self.config)
             logger.info(f"Mamba model initialized for {len(symbols)} symbols")
+            # Try to load persisted weights
+            try:
+                import os
+                weights_path = os.path.join('models', 'mamba', 'weights.weights.h5')
+                if os.path.exists(weights_path):
+                    self.model.build((None, 60, 4))  # Build with default feature shape
+                    self.model.load_weights(weights_path)
+                    logger.info(f"Loaded Mamba weights from {weights_path}")
+                else:
+                    # Backward compatibility: support legacy file name
+                    legacy_path = os.path.join('models', 'mamba', 'weights.h5')
+                    if os.path.exists(legacy_path):
+                        self.model.build((None, 60, 4))
+                        self.model.load_weights(legacy_path)
+                        logger.info(f"Loaded Mamba legacy weights from {legacy_path}; consider migrating to {weights_path}")
+            except Exception as e:
+                logger.warning(f"Mamba weight load skipped: {e}")
         else:
             logger.warning("TensorFlow not available - using fallback predictions")
 
@@ -452,7 +462,7 @@ class MambaPredictor:
         self.model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
             loss='mse',
-            metrics=['mae']
+            metrics=['mae'] * len(self.config.prediction_horizons)
         )
 
         # Train
@@ -464,6 +474,16 @@ class MambaPredictor:
             validation_split=0.2,
             verbose=1
         )
+
+        # Persist best weights (simple save after fit)
+        try:
+            import os
+            weights_path = os.path.join('models', 'mamba', 'weights.weights.h5')
+            os.makedirs(os.path.dirname(weights_path), exist_ok=True)
+            self.model.save_weights(weights_path)
+            logger.info(f"Saved Mamba weights to {weights_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save Mamba weights: {e}")
 
         logger.info("Mamba training complete")
 

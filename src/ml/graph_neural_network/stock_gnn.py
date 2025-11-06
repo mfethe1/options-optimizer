@@ -22,17 +22,19 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 import logging
+import os
 
 try:
     import tensorflow as tf
     from tensorflow import keras
     from tensorflow.keras import layers
     TENSORFLOW_AVAILABLE = True
-except ImportError:
+except Exception as e:
     TENSORFLOW_AVAILABLE = False
     tf = None
     keras = None
     layers = None
+    logging.getLogger(__name__).warning(f"TensorFlow import failed for GNN: {e!r}")
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +174,26 @@ class StockGNN:
         self.model = None
         logger.info(f"Initialized StockGNN: {num_stocks} stocks, {hidden_dim}D hidden")
 
+    def save_weights(self, path: str) -> None:
+        if not TENSORFLOW_AVAILABLE or self.model is None:
+            return
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        # Keras 3 requires .weights.h5 extension for HDF5 format
+        if not path.endswith('.weights.h5'):
+            base, ext = os.path.splitext(path)
+            path = base + '.weights.h5'
+        self.model.save_weights(path)
+
+    def load_weights(self, path: str) -> bool:
+        if not TENSORFLOW_AVAILABLE:
+            return False
+        if not os.path.exists(path):
+            return False
+        if self.model is None:
+            self.build_model()
+        self.model.load_weights(path)
+        return True
+
     def build_model(self):
         """Build GNN architecture"""
         # Inputs
@@ -287,6 +309,14 @@ class GNNPredictor:
         self.gnn = StockGNN(num_stocks=len(symbols))
         self.graph_builder = CorrelationGraphBuilder()
         self.is_trained = False
+        # Attempt to load persisted weights
+        try:
+            weights_path = os.path.join('models', 'gnn', 'weights.weights.h5')
+            if self.gnn.load_weights(weights_path):
+                self.is_trained = True
+                logger.info(f"Loaded GNN weights from {weights_path}")
+        except Exception as e:
+            logger.warning(f"GNN weight load skipped: {e}")
 
     async def predict(self,
                      price_data: Dict[str, np.ndarray],
@@ -309,8 +339,8 @@ class GNNPredictor:
         adj_matrix = graph.correlation_matrix.reshape(1, len(self.symbols), len(self.symbols))
 
         # Predict
-        if self.model and self.is_trained:
-            predictions = self.model.predict([node_features, adj_matrix], verbose=0)[0]
+        if self.gnn.model is not None and self.is_trained:
+            predictions = self.gnn.model.predict([node_features, adj_matrix], verbose=0)[0]
 
             return {
                 symbol: float(pred[0])
@@ -318,3 +348,50 @@ class GNNPredictor:
             }
 
         return {symbol: 0.0 for symbol in self.symbols}
+
+    async def train(self,
+                    price_data: Dict[str, np.ndarray],
+                    features: Dict[str, np.ndarray],
+                    epochs: int = 10,
+                    batch_size: int = 32) -> Dict:
+        """
+        Minimal training loop using next-day returns as supervision.
+        Builds a single-snapshot batch for demonstration/training bootstrap.
+        """
+        if not TENSORFLOW_AVAILABLE:
+            raise ImportError("TensorFlow required")
+
+        # Build model if needed
+        if self.gnn.model is None:
+            self.gnn.build_model()
+
+        # Graph snapshot
+        graph = self.graph_builder.build_graph(price_data, features)
+        node_features = graph.node_features.reshape(1, len(self.symbols), -1)
+        adj_matrix = graph.correlation_matrix.reshape(1, len(self.symbols), len(self.symbols))
+
+        # Targets: approximate next-day return using last two closes
+        targets = []
+        for sym in graph.symbols:
+            prices = price_data[sym]
+            if len(prices) >= 2:
+                r = (prices[-1] - prices[-2]) / (prices[-2] + 1e-8)
+            else:
+                r = 0.0
+            targets.append([r])
+        y = np.array(targets, dtype=np.float32).reshape(1, len(self.symbols), 1)
+
+        history = self.gnn.model.fit([node_features, adj_matrix], y,
+                                     epochs=epochs,
+                                     batch_size=1,
+                                     verbose=0)
+        # Persist
+        weights_path = os.path.join('models', 'gnn', 'weights.weights.h5')
+        self.gnn.save_weights(weights_path)
+        self.is_trained = True
+        return {
+            'epochs': epochs,
+            'final_loss': float(history.history['loss'][-1]),
+            'weights_path': weights_path,
+            'num_nodes': len(self.symbols)
+        }

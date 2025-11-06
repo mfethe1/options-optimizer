@@ -78,8 +78,17 @@ const UnifiedAnalysis: React.FC = () => {
   // Model data state
   const [models, setModels] = useState<ModelData[]>([
     {
+      id: 'tft',
+      name: 'Temporal Fusion Transformer',
+      color: '#EC4899',
+      enabled: true,
+      predictions: [],
+      type: 'probabilistic',
+      accuracy: 0.89
+    },
+    {
       id: 'epidemic',
-      name: 'Epidemic Volatility (VIX)',
+      name: 'Epidemic Volatility (SIR/SEIR)',
       color: '#8B5CF6',
       enabled: true,
       predictions: [],
@@ -97,7 +106,7 @@ const UnifiedAnalysis: React.FC = () => {
     },
     {
       id: 'mamba',
-      name: 'Mamba (Linear O(N))',
+      name: 'Mamba State-Space (O(N))',
       color: '#F59E0B',
       enabled: true,
       predictions: [],
@@ -115,7 +124,7 @@ const UnifiedAnalysis: React.FC = () => {
     },
     {
       id: 'ensemble',
-      name: 'Ensemble Consensus',
+      name: 'Ensemble Consensus (All Models)',
       color: '#EF4444',
       enabled: true,
       predictions: [],
@@ -130,14 +139,30 @@ const UnifiedAnalysis: React.FC = () => {
   // WebSocket for real-time updates
   useEffect(() => {
     if (isStreaming) {
-      const ws = new WebSocket(`ws://localhost:8000/ws/unified-predictions/${symbol}`);
-      
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        updateModelPredictions(data);
-      };
+      // Import API config at runtime to avoid circular dependencies
+      import('../config/api.config').then(({ buildWsUrl }) => {
+        const wsUrl = buildWsUrl('unified/ws/unified-predictions/' + symbol);
+        const ws = new WebSocket(wsUrl);
 
-      return () => ws.close();
+        ws.onopen = () => {
+          console.log('[UnifiedAnalysis] WebSocket connected:', wsUrl);
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          updateModelPredictions(data);
+        };
+
+        ws.onerror = (error) => {
+          console.error('[UnifiedAnalysis] WebSocket error:', error);
+        };
+
+        ws.onclose = () => {
+          console.log('[UnifiedAnalysis] WebSocket closed');
+        };
+
+        return () => ws.close();
+      });
     }
   }, [isStreaming, symbol]);
 
@@ -160,41 +185,53 @@ const UnifiedAnalysis: React.FC = () => {
   const loadAllPredictions = async () => {
     setLoading(true);
     try {
-      // Fetch predictions from all models
-      const responses = await Promise.all([
-        fetch(`http://localhost:8000/epidemic/forecast`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol, use_cache: true })
-        }),
-        fetch(`http://localhost:8000/gnn/forecast`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbols: [symbol], lookback_days: 20 })
-        }),
-        fetch(`http://localhost:8000/mamba/forecast`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol, sequence_length: 100 })
-        }),
-        fetch(`http://localhost:8000/pinn/forecast`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol })
-        }),
-        fetch(`http://localhost:8000/ensemble/analyze`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbols: [symbol] })
-        })
-      ]);
+      /**
+       * Fetches live market data from yfinance API via backend
+       * Data granularity:
+       * - 1D: 5-minute intervals (high-frequency intraday)
+       * - 5D: 15-minute intervals (intraday week view)
+       * - 1M: 1-hour intervals (hourly month view)
+       * - 3M/1Y: daily intervals (long-term view)
+       *
+       * Backend implements 60-second caching to reduce API load
+       * Data includes: Open, High, Low, Close, Volume (OHLCV)
+       */
+      // Import API config dynamically
+      const { buildApiUrl } = await import('../config/api.config');
+      const url = buildApiUrl(`unified/forecast/all?symbol=${encodeURIComponent(symbol)}&time_range=${encodeURIComponent(timeRange)}`);
+      console.log('[UnifiedAnalysis] Fetching from:', url);
 
-      const data = await Promise.all(responses.map(r => r.json()));
-      
-      // Process and align the data
-      processAndAlignData(data);
+      const resp = await fetch(url, {
+        method: 'POST'
+      });
+      if (!resp.ok) throw new Error(`Unified forecast failed: ${resp.status}`);
+      const payload = await resp.json();
+      const count = Array.isArray(payload?.timeline) ? payload.timeline.length : 0;
+      const sampleFirst = count ? payload.timeline[0] : null;
+      const sampleLast = count ? payload.timeline[count - 1] : null;
+      const sampleFirstStr = sampleFirst ? JSON.stringify(sampleFirst) : 'null';
+      const sampleLastStr = sampleLast ? JSON.stringify(sampleLast) : 'null';
+      console.log('[UnifiedAnalysis] fetched live market data timeline', { symbol, timeRange, ok: resp.ok, status: resp.status, count });
+      console.log('[UnifiedAnalysis] timeline samples', sampleFirstStr, sampleLastStr);
+      if (payload && Array.isArray(payload.timeline)) {
+        setChartData(payload.timeline);
+        if (payload.timeline.length) {
+          const acts = payload.timeline.map((p: any) => p.actual).filter((v: any) => typeof v === 'number');
+          console.log('[UnifiedAnalysis] live market data stats', {
+            points: acts.length,
+            min: acts.length ? Math.min(...acts).toFixed(2) : null,
+            max: acts.length ? Math.max(...acts).toFixed(2) : null,
+            source: 'yfinance',
+            granularity: timeRange === '1D' ? '5min' : timeRange === '5D' ? '15min' : '1h/1d'
+          });
+        }
+      } else {
+        console.warn('Unexpected unified payload shape', payload);
+        setChartData([]);
+      }
     } catch (error) {
-      console.error('Error loading predictions:', error);
+      console.error('Error loading unified predictions:', error);
+      setChartData([]);
     } finally {
       setLoading(false);
     }

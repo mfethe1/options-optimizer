@@ -41,38 +41,45 @@ const NavigationSidebar: React.FC = () => {
       description: 'All models overlay'
     },
     {
-      label: 'Neural Networks',
+      label: 'ML Models Info',
       icon: <Psychology />,
+      description: 'All models shown in Unified Analysis',
       children: [
         {
-          label: 'Epidemic Volatility',
-          path: '/epidemic-volatility',
+          label: '→ TFT (Temporal Fusion Transformer)',
+          path: '/',
+          icon: <ShowChart />,
+          description: 'Multi-horizon forecasting'
+        },
+        {
+          label: '→ Epidemic Volatility (SIR/SEIR)',
+          path: '/',
           icon: <Biotech />,
-          description: 'VIX prediction 24-48h ahead'
+          description: 'VIX contagion modeling'
         },
         {
-          label: 'Graph Neural Network',
-          path: '/gnn',
+          label: '→ GNN (Graph Neural Network)',
+          path: '/',
           icon: <AccountBalance />,
-          description: 'Stock correlation analysis'
+          description: 'Stock correlation networks'
         },
         {
-          label: 'Mamba (Linear O(N))',
-          path: '/mamba',
+          label: '→ Mamba State-Space (O(N))',
+          path: '/',
           icon: <Speed />,
-          description: '5x faster than Transformers'
+          description: 'Linear complexity forecasting'
         },
         {
-          label: 'PINN Options',
-          path: '/pinn',
+          label: '→ PINN (Physics-Informed NN)',
+          path: '/',
           icon: <Science />,
-          description: 'Physics-informed pricing'
+          description: 'Black-Scholes constraints'
         },
         {
-          label: 'Ensemble Analysis',
-          path: '/ensemble',
+          label: '→ Ensemble (All Models)',
+          path: '/',
           icon: <Assessment />,
-          description: 'Combined model predictions'
+          description: 'Weighted consensus'
         }
       ]
     },

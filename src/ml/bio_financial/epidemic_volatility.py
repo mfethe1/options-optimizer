@@ -46,9 +46,9 @@ try:
     from tensorflow import keras
     from tensorflow.keras import layers, models
     TENSORFLOW_AVAILABLE = True
-except ImportError:
+except Exception as e:
     TENSORFLOW_AVAILABLE = False
-    logging.warning("TensorFlow not available - epidemic volatility features will be limited")
+    logging.warning(f"TensorFlow import failed for Epidemic Volatility: {e!r}")
 
 logger = logging.getLogger(__name__)
 
@@ -107,11 +107,13 @@ class EpidemicForecast:
     S_forecast: List[float]  # Susceptible trajectory
     I_forecast: List[float]  # Infected trajectory
     R_forecast: List[float]  # Recovered trajectory
-    E_forecast: Optional[List[float]] = None  # Exposed (SEIR only)
 
     # Parameters
     beta_trajectory: List[float]
     gamma_trajectory: List[float]
+
+    # Optional SEIR-only
+    E_forecast: Optional[List[float]] = None  # Exposed (SEIR only)
 
     # Interpretation
     herd_immunity_days: Optional[int] = None  # Days until stabilization
@@ -431,6 +433,15 @@ class EpidemicVolatilityModel:
         if not self.is_trained:
             logger.warning("Model not trained, using default parameters")
 
+        # Lazily build minimal networks if not yet built (allows inference before training)
+        if self.parameter_network is None or self.vix_decoder is None:
+            try:
+                self.build_model(input_dim=int(features.shape[0]))
+                logger.info("Built epidemic networks on-demand for inference")
+            except Exception as _e:  # pragma: no cover
+                logger.error(f"Failed to build epidemic networks: {_e}")
+                raise
+
         # Get epidemic parameters from features
         outputs = self.parameter_network.predict(features.reshape(1, -1), verbose=0)
 
@@ -538,8 +549,18 @@ class EpidemicVolatilityPredictor:
         else:
             regime = MarketRegime.RECOVERED
 
-        # Confidence based on model certainty (simplified)
-        confidence = 0.75  # Placeholder
+        # Confidence based on conservation residual + regime clarity
+        mass_total = state.S + state.I + state.R + (state.E or 0.0)
+        mass_deficit = abs(1.0 - mass_total)
+        raw_conf = max(0.0, 1.0 - min(1.0, mass_deficit * 2.0))  # Penalize mass violation
+
+        comps = [state.S, state.I, state.R]
+        if state.E is not None:
+            comps.append(state.E)
+        sorted_comps = sorted(comps, reverse=True)
+        clarity = sorted_comps[0] - (sorted_comps[1] if len(sorted_comps) > 1 else 0.0)
+
+        confidence = float(np.clip(0.5 * raw_conf + 0.5 * clarity, 0.05, 0.99))
 
         # Create forecast
         forecast = EpidemicForecast(

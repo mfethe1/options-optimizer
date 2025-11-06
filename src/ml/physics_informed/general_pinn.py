@@ -12,6 +12,8 @@ Key Applications:
 
 Research: "Physics-Informed Neural Networks" (Raissi et al., 2019)
 """
+from __future__ import annotations
+
 
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Callable
@@ -27,12 +29,12 @@ try:
     from tensorflow import keras
     from tensorflow.keras import layers
     TENSORFLOW_AVAILABLE = True
-except ImportError:
+except Exception as e:
     TENSORFLOW_AVAILABLE = False
     tf = None
     keras = None
     layers = None
-    logger.warning("TensorFlow not available - PINN framework will use simplified mode")
+    logger.warning(f"TensorFlow import failed for PINN: {e!r}")
 
 
 @dataclass
@@ -43,6 +45,7 @@ class PINNConfig:
     output_dim: int = 1
     learning_rate: float = 0.001
     physics_weight: float = 1.0  # Weight for physics loss vs data loss
+    output_activation: Optional[str] = None  # 'softplus' for positive outputs
 
     def __post_init__(self):
         if self.hidden_layers is None:
@@ -250,7 +253,11 @@ class GeneralPINN(keras.Model if TENSORFLOW_AVAILABLE else object):
                     layers.Dense(units, activation='tanh', name=f'hidden_{i}')
                 )
 
-            self.output_layer = layers.Dense(config.output_dim, name='output')
+            self.output_layer = layers.Dense(
+                config.output_dim,
+                activation=config.output_activation,
+                name='output'
+            )
 
     def call(self, x):
         """Forward pass"""
@@ -365,13 +372,25 @@ class OptionPricingPINN:
             hidden_layers=[64, 64, 64, 32],
             output_dim=1,
             learning_rate=0.001,
-            physics_weight=physics_weight
+            physics_weight=physics_weight,
+            output_activation='softplus'  # Ensure positive option prices
         )
 
         if TENSORFLOW_AVAILABLE:
             self.model = GeneralPINN(config, self.constraints)
             self.model.compile(optimizer=keras.optimizers.Adam(config.learning_rate))
             logger.info(f"Option pricing PINN initialized ({option_type})")
+            # Try to load persisted weights
+            try:
+                import os
+                weights_path = os.path.join('models', 'pinn', 'option_pricing', 'model.weights.h5')
+                if os.path.exists(weights_path):
+                    # Build model by calling once
+                    _ = self.model(tf.constant([[100.0, 1.0, 100.0]], dtype=tf.float32), training=False)
+                    self.model.load_weights(weights_path)
+                    logger.info(f"Loaded PINN option weights from {weights_path}")
+            except Exception as e:
+                logger.warning(f"PINN option weight load skipped: {e}")
         else:
             self.model = None
             logger.warning("TensorFlow not available - using Black-Scholes formula")
@@ -427,28 +446,38 @@ class OptionPricingPINN:
         # Price
         price = self.model(x, training=False).numpy()[0, 0]
 
-        # Greeks via automatic differentiation
-        with tf.GradientTape(persistent=True) as tape2:
-            tape2.watch(x)
-            with tf.GradientTape(persistent=True) as tape1:
-                tape1.watch(x)
-                V = self.model(x, training=False)
+        # Greeks via automatic differentiation (robust fallback if gradients are None)
+        delta = None
+        theta = None
+        gamma = None
+        try:
+            with tf.GradientTape(persistent=True) as tape2:
+                tape2.watch(x)
+                with tf.GradientTape(persistent=True) as tape1:
+                    tape1.watch(x)
+                    V = self.model(x, training=False)
 
-            # First derivatives
-            dV = tape1.gradient(V, x)
-            delta = dV[0, 0].numpy()  # ∂V/∂S
-            theta = -dV[0, 1].numpy()  # -∂V/∂τ
+                # First derivatives
+                dV = tape1.gradient(V, x)
+                if dV is not None:
+                    dV_S = dV[:, 0:1]
+                    delta = dV_S[0, 0].numpy()
+                    theta = (-dV[:, 1:2])[0, 0].numpy()
 
-        # Second derivative (Gamma)
-        d2V = tape2.gradient(dV[:, 0:1], x)
-        gamma = d2V[0, 0].numpy()  # ∂²V/∂S²
+                # Second derivative (Gamma)
+                if dV is not None:
+                    d2V = tape2.gradient(dV_S, x)
+                    if d2V is not None:
+                        gamma = d2V[0, 0].numpy()
+        except Exception as _grad_err:  # pragma: no cover
+            logger.warning(f"PINN Greeks computation skipped: {_grad_err}")
 
         return {
             'price': float(price),
-            'method': 'PINN',
-            'delta': float(delta),
-            'gamma': float(gamma),
-            'theta': float(theta)
+            'method': 'PINN' if delta is not None and gamma is not None and theta is not None else 'PINN (price-only)',
+            'delta': float(delta) if delta is not None else None,
+            'gamma': float(gamma) if gamma is not None else None,
+            'theta': float(theta) if theta is not None else None
         }
 
     def train(
@@ -491,6 +520,16 @@ class OptionPricingPINN:
             batch_size=256,
             verbose=0
         )
+
+        # Persist weights
+        try:
+            import os
+            weights_path = os.path.join('models', 'pinn', 'option_pricing', 'model.weights.h5')
+            os.makedirs(os.path.dirname(weights_path), exist_ok=True)
+            self.model.save_weights(weights_path)
+            logger.info(f"Saved PINN option weights to {weights_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save PINN option weights: {e}")
 
         logger.info("PINN training complete")
 
