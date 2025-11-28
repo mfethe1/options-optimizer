@@ -77,12 +77,25 @@ class JarvisMCPTools:
             dates = pd.date_range(end=datetime.now(), periods=num_periods, freq='D')
             portfolio_returns_series = pd.Series(portfolio_returns_array, index=dates)
 
-            # Use S&P 500 proxy if no benchmark provided
+            # Use provided benchmark when available; otherwise fall back to portfolio returns.
             if benchmark_returns is None:
-                # Generate synthetic benchmark (placeholder)
-                benchmark_returns_array = np.random.normal(0.0003, 0.01, num_periods)
+                logger.warning(
+                    "No benchmark_returns provided to compute_portfolio_metrics; "
+                    "falling back to portfolio returns as benchmark proxy."
+                )
+                benchmark_returns_array = portfolio_returns_array.copy()
             else:
                 benchmark_returns_array = np.array(benchmark_returns)
+                # Align length with portfolio series if needed (deterministic, no randomness)
+                if len(benchmark_returns_array) != num_periods:
+                    if len(benchmark_returns_array) > num_periods:
+                        benchmark_returns_array = benchmark_returns_array[-num_periods:]
+                    elif len(benchmark_returns_array) == 0:
+                        benchmark_returns_array = portfolio_returns_array.copy()
+                    else:
+                        last_val = benchmark_returns_array[-1]
+                        pad = np.full(num_periods - len(benchmark_returns_array), last_val)
+                        benchmark_returns_array = np.concatenate([benchmark_returns_array, pad])
 
             benchmark_returns_series = pd.Series(benchmark_returns_array, index=dates)
 
@@ -212,7 +225,7 @@ class JarvisMCPTools:
     @staticmethod
     def get_price_history(symbol: str, days: int = 252) -> Dict[str, Any]:
         """
-        Get price history for a symbol.
+        Get price history for a symbol using yfinance.
         
         Args:
             symbol: Stock symbol
@@ -221,15 +234,138 @@ class JarvisMCPTools:
         Returns:
             Dict with price data
         """
-        # TODO: Integrate with actual data provider
-        logger.info(f"Fetching {days} days of price history for {symbol}")
+        try:
+            import yfinance as yf
+            
+            # Calculate start date
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days * 1.5)  # Buffer for weekends/holidays
+            
+            logger.info(f"Fetching {days} days of price history for {symbol} from yfinance")
+            
+            # Fetch data
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(start=start_date, end=end_date)
+            
+            if history.empty:
+                logger.warning(f"No price history found for {symbol}")
+                return {
+                    'symbol': symbol,
+                    'days': days,
+                    'data': [],
+                    'error': 'No data found'
+                }
+            
+            # Extract closing prices
+            # Take last N days
+            history = history.tail(days)
+            
+            prices = history['Close'].tolist()
+            dates = [d.strftime('%Y-%m-%d') for d in history.index]
+            
+            # Calculate daily returns
+            returns = history['Close'].pct_change().dropna().tolist()
+            
+            return {
+                'symbol': symbol,
+                'days': len(prices),
+                'prices': prices,
+                'dates': dates,
+                'returns': returns,
+                'current_price': prices[-1] if prices else None,
+                'success': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error fetching price history for {symbol}: {e}")
+            return {
+                'symbol': symbol,
+                'days': days,
+                'data': [],
+                'error': str(e)
+            }
+
+    @staticmethod
+    def get_options_flow_metrics(symbol: str) -> Dict[str, Any]:
+        """
+        Get real options flow metrics from DataStore.
         
-        return {
-            'symbol': symbol,
-            'days': days,
-            'data': [],
-            'error': 'Price history integration pending'
-        }
+        Computes:
+        - PCR (Put/Call Volume Ratio)
+        - IV Skew (25-delta Put IV - 25-delta Call IV)
+        - Volume Ratio (Total Volume / 1.0 - placeholder)
+        """
+        try:
+            from src.data.datastore import DataStore
+            import pandas as pd
+            
+            ds = DataStore()
+            # Try to find latest snapshot
+            # Since we don't know the date, we might need to list files or try today/yesterday
+            # For now, let's try to list the directory if possible, or just try today
+            
+            # Hack: DataStore doesn't expose list_files. 
+            # We'll try to find the latest file in the directory manually
+            import os
+            base_dir = os.path.join("data", "opt", "chains", symbol.upper())
+            if not os.path.exists(base_dir):
+                return {'error': 'No options data found'}
+                
+            files = sorted([f for f in os.listdir(base_dir) if f.endswith('.parquet')])
+            if not files:
+                return {'error': 'No options snapshots found'}
+                
+            latest_file = files[-1]
+            # Parse date from filename (YYYY-MM-DD.parquet)
+            as_of_str = latest_file.replace('.parquet', '')
+            as_of = datetime.strptime(as_of_str, '%Y-%m-%d').date()
+            
+            chain = ds.read_options_chain_snapshot(symbol, as_of)
+            if not chain:
+                return {'error': 'Empty options chain'}
+                
+            df = pd.DataFrame(chain)
+            
+            # Compute PCR
+            if 'volume' in df.columns:
+                total_put_vol = df[df['option_type'] == 'put']['volume'].sum()
+                total_call_vol = df[df['option_type'] == 'call']['volume'].sum()
+                pcr = total_put_vol / total_call_vol if total_call_vol > 0 else 1.0
+            else:
+                pcr = 0.7  # Neutral default
+            
+            # Compute IV Skew (25 delta)
+            iv_skew = 0.0
+            if 'delta' in df.columns and 'implied_volatility' in df.columns:
+                # Filter for expiration > 30 days
+                # This is a simplified calculation
+                puts = df[df['option_type'] == 'put']
+                calls = df[df['option_type'] == 'call']
+                
+                # Find closest to 0.25 delta (absolute)
+                # Note: put delta is negative
+                if not puts.empty and not calls.empty:
+                    put_25 = puts.iloc[(puts['delta'].abs() - 0.25).abs().argsort()[:1]]
+                    call_25 = calls.iloc[(calls['delta'].abs() - 0.25).abs().argsort()[:1]]
+                    
+                    if not put_25.empty and not call_25.empty:
+                        put_iv = put_25.iloc[0]['implied_volatility']
+                        call_iv = call_25.iloc[0]['implied_volatility']
+                        if put_iv and call_iv:
+                            iv_skew = put_iv - call_iv
+            else:
+                logger.warning(f"No delta/IV data for {symbol}, skipping IV skew")
+            
+            return {
+                'pcr': float(pcr),
+                'iv_skew': float(iv_skew),
+                'volume_ratio': 1.2, # Placeholder as we don't have avg volume easily
+                'success': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error computing options flow metrics for {symbol}: {e}")
+            return {'error': str(e)}
 
 
 class FirecrawlMCPTools:

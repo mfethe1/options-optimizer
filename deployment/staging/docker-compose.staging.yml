@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # Redis for L2 caching (staging configuration)
+  redis-staging:
+    image: redis:7-alpine
+    container_name: options_redis_staging
+    ports:
+      - "6380:6379"  # Different port for staging
+    volumes:
+      - redis_staging_data:/data
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - options_staging_network
+
+  # FastAPI backend (staging with PINN fixes)
+  api-staging:
+    build:
+      context: ../../
+      dockerfile: deployment/staging/Dockerfile.staging
+    container_name: options_api_staging
+    ports:
+      - "8001:8000"  # Different port for staging
+    environment:
+      - ENVIRONMENT=staging
+      - REDIS_URL=redis://redis-staging:6379
+      - PHASE4_WS_INTERVAL_SECONDS=30
+      - LOG_LEVEL=INFO
+      - PINN_CACHE_SIZE=10
+      - TF_CPP_MIN_LOG_LEVEL=2
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      # PINN Performance Monitoring
+      - PINN_LATENCY_TARGET_MS=260
+      - PINN_FALLBACK_THRESHOLD=0.1
+      - ENABLE_PINN_METRICS=true
+    depends_on:
+      redis-staging:
+        condition: service_healthy
+    volumes:
+      - ../../src:/app/src
+      - ../../models:/app/models
+      - prometheus_staging_data:/tmp/prometheus
+    networks:
+      - options_staging_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Prometheus for staging metrics
+  prometheus-staging:
+    image: prom/prometheus:latest
+    container_name: prometheus_staging
+    ports:
+      - "9091:9090"  # Different port for staging
+    volumes:
+      - ./prometheus.staging.yml:/etc/prometheus/prometheus.yml
+      - prometheus_staging_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    networks:
+      - options_staging_network
+    restart: unless-stopped
+
+  # Grafana for staging dashboards
+  grafana-staging:
+    image: grafana/grafana:latest
+    container_name: grafana_staging
+    ports:
+      - "3001:3000"  # Different port for staging
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=staging123
+    volumes:
+      - grafana_staging_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - options_staging_network
+    restart: unless-stopped
+
+volumes:
+  redis_staging_data:
+    driver: local
+  prometheus_staging_data:
+    driver: local
+  grafana_staging_data:
+    driver: local
+
+networks:
+  options_staging_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -5,6 +5,7 @@ Provides in-memory caching for market data with TTL (Time-To-Live).
 """
 
 import logging
+import threading
 from typing import Any, Dict, Optional, Callable
 from datetime import datetime, timedelta
 from functools import wraps
@@ -38,10 +39,11 @@ class CacheEntry:
 class InMemoryCache:
     """
     Simple in-memory cache with TTL support.
-    
-    Thread-safe for basic operations.
+
+    Thread-safe for all operations using RLock (reentrant lock).
     """
     def __init__(self):
+        self._lock = threading.RLock()  # Reentrant lock for nested calls
         self._cache: Dict[str, CacheEntry] = {}
         self._stats = {
             "hits": 0,
@@ -53,104 +55,111 @@ class InMemoryCache:
     def get(self, key: str) -> Optional[Any]:
         """
         Get a value from the cache.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
             Cached value or None if not found or expired
         """
-        entry = self._cache.get(key)
-        
-        if entry is None:
-            self._stats["misses"] += 1
-            return None
-        
-        if entry.is_expired():
-            # Remove expired entry
-            del self._cache[key]
-            self._stats["misses"] += 1
-            self._stats["evictions"] += 1
-            return None
-        
-        self._stats["hits"] += 1
-        return entry.value
+        with self._lock:
+            entry = self._cache.get(key)
+
+            if entry is None:
+                self._stats["misses"] += 1
+                return None
+
+            if entry.is_expired():
+                # Remove expired entry
+                del self._cache[key]
+                self._stats["misses"] += 1
+                self._stats["evictions"] += 1
+                return None
+
+            self._stats["hits"] += 1
+            return entry.value
     
     def set(self, key: str, value: Any, ttl_seconds: int = 300):
         """
         Set a value in the cache.
-        
+
         Args:
             key: Cache key
             value: Value to cache
             ttl_seconds: Time-to-live in seconds (default: 5 minutes)
         """
-        self._cache[key] = CacheEntry(value, ttl_seconds)
-        self._stats["sets"] += 1
+        with self._lock:
+            self._cache[key] = CacheEntry(value, ttl_seconds)
+            self._stats["sets"] += 1
     
     def delete(self, key: str) -> bool:
         """
         Delete a value from the cache.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
             True if key was deleted, False if not found
         """
-        if key in self._cache:
-            del self._cache[key]
-            return True
-        return False
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+                return True
+            return False
     
     def clear(self):
         """Clear all cache entries."""
-        count = len(self._cache)
-        self._cache.clear()
-        self._stats["evictions"] += count
-        logger.info(f"Cache cleared: {count} entries removed")
+        with self._lock:
+            count = len(self._cache)
+            self._cache.clear()
+            self._stats["evictions"] += count
+            logger.info(f"Cache cleared: {count} entries removed")
     
     def clear_expired(self):
         """Remove all expired entries."""
-        expired_keys = [
-            key for key, entry in self._cache.items()
-            if entry.is_expired()
-        ]
-        
-        for key in expired_keys:
-            del self._cache[key]
-        
-        if expired_keys:
-            self._stats["evictions"] += len(expired_keys)
-            logger.info(f"Cleared {len(expired_keys)} expired cache entries")
+        with self._lock:
+            expired_keys = [
+                key for key, entry in self._cache.items()
+                if entry.is_expired()
+            ]
+
+            for key in expired_keys:
+                del self._cache[key]
+
+            if expired_keys:
+                self._stats["evictions"] += len(expired_keys)
+                logger.info(f"Cleared {len(expired_keys)} expired cache entries")
     
     def get_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics.
-        
+
         Returns:
             Dictionary with cache stats
         """
-        total_requests = self._stats["hits"] + self._stats["misses"]
-        hit_rate = (
-            self._stats["hits"] / total_requests
-            if total_requests > 0
-            else 0.0
-        )
-        
-        return {
-            "size": len(self._cache),
-            "hits": self._stats["hits"],
-            "misses": self._stats["misses"],
-            "sets": self._stats["sets"],
-            "evictions": self._stats["evictions"],
-            "hit_rate": hit_rate,
-            "total_requests": total_requests
-        }
+        with self._lock:
+            total_requests = self._stats["hits"] + self._stats["misses"]
+            hit_rate = (
+                self._stats["hits"] / total_requests
+                if total_requests > 0
+                else 0.0
+            )
+
+            return {
+                "size": len(self._cache),
+                "hits": self._stats["hits"],
+                "misses": self._stats["misses"],
+                "sets": self._stats["sets"],
+                "evictions": self._stats["evictions"],
+                "hit_rate": hit_rate,
+                "total_requests": total_requests
+            }
     
     def get_keys(self) -> list:
         """Get all cache keys."""
-        return list(self._cache.keys())
+        with self._lock:
+            return list(self._cache.keys())
 
 
 # Global cache instance

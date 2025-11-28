@@ -1,0 +1,122 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: pinn-latency-analysis
+  namespace: options-production
+spec:
+  args:
+  - name: service-name
+  - name: prometheus-server
+    value: http://prometheus:9090
+  metrics:
+  - name: pinn-latency-p95
+    interval: 30s
+    count: 10
+    successCondition: result[0] <= 260  # Target: <260ms
+    failureLimit: 3
+    provider:
+      prometheus:
+        address: "{{args.prometheus-server}}"
+        query: |
+          histogram_quantile(0.95,
+            sum(rate(pinn_prediction_latency_seconds_bucket{
+              service="{{args.service-name}}"
+            }[5m])) by (le)
+          ) * 1000
+  - name: pinn-cache-hit-rate
+    interval: 30s
+    count: 10
+    successCondition: result[0] >= 0.8  # 80% cache hit rate minimum
+    failureLimit: 2
+    provider:
+      prometheus:
+        address: "{{args.prometheus-server}}"
+        query: |
+          sum(rate(pinn_cache_hits_total{service="{{args.service-name}}"}[5m])) /
+          (sum(rate(pinn_cache_hits_total{service="{{args.service-name}}"}[5m])) +
+           sum(rate(pinn_cache_misses_total{service="{{args.service-name}}"}[5m])))
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: pinn-error-rate-analysis
+  namespace: options-production
+spec:
+  args:
+  - name: service-name
+  - name: prometheus-server
+    value: http://prometheus:9090
+  metrics:
+  - name: pinn-error-rate
+    interval: 30s
+    count: 10
+    successCondition: result[0] <= 0.05  # <5% error rate
+    failureLimit: 3
+    provider:
+      prometheus:
+        address: "{{args.prometheus-server}}"
+        query: |
+          sum(rate(pinn_prediction_errors_total{service="{{args.service-name}}"}[5m])) /
+          sum(rate(http_requests_total{service="{{args.service-name}}", endpoint=~"/api/pinn/.*"}[5m]))
+  - name: pinn-fallback-rate
+    interval: 30s
+    count: 10
+    successCondition: result[0] <= 0.1  # <10% fallback rate
+    failureLimit: 2
+    provider:
+      prometheus:
+        address: "{{args.prometheus-server}}"
+        query: |
+          sum(rate(pinn_fallback_total{service="{{args.service-name}}"}[5m])) /
+          sum(rate(http_requests_total{service="{{args.service-name}}", endpoint=~"/api/pinn/.*"}[5m]))
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: pinn-comprehensive-analysis
+  namespace: options-production
+spec:
+  args:
+  - name: service-name
+  - name: prometheus-server
+    value: http://prometheus:9090
+  metrics:
+  - name: overall-success-rate
+    interval: 30s
+    count: 15
+    successCondition: result[0] >= 0.95  # 95% success rate
+    failureLimit: 3
+    provider:
+      prometheus:
+        address: "{{args.prometheus-server}}"
+        query: |
+          sum(rate(http_requests_total{service="{{args.service-name}}", status!~"5.."}[5m])) /
+          sum(rate(http_requests_total{service="{{args.service-name}}"}[5m]))
+  - name: pinn-latency-improvement
+    interval: 30s
+    count: 10
+    successCondition: result[0] >= 0.75  # 75% improvement minimum
+    provider:
+      prometheus:
+        address: "{{args.prometheus-server}}"
+        query: |
+          1 - (
+            histogram_quantile(0.95,
+              sum(rate(pinn_prediction_latency_seconds_bucket{
+                service="{{args.service-name}}"
+              }[5m])) by (le)
+            ) / 1.35
+          )
+  - name: memory-usage
+    interval: 30s
+    count: 10
+    successCondition: result[0] <= 1.8  # <1.8GB memory usage
+    failureLimit: 2
+    provider:
+      prometheus:
+        address: "{{args.prometheus-server}}"
+        query: |
+          avg(container_memory_usage_bytes{
+            pod=~"options-api-.*",
+            container="options-api"
+          }) / 1024 / 1024 / 1024

@@ -12,6 +12,12 @@ Key Advantages:
 
 Research: "Mamba: Linear-Time Sequence Modeling with Selective State Spaces"
 (Gu & Dao, 2023)
+
+Architecture Notes:
+- Properly implements Keras Model API with build() method
+- Serializable config for model save/load
+- Idempotent layer creation for distributed training
+- See P0_MAMBA_BUILD_METHOD_FIX.md for implementation details
 """
 
 import numpy as np
@@ -162,16 +168,21 @@ class MambaBlock(layers.Layer if TENSORFLOW_AVAILABLE else object):
         x -> Linear -> Conv1D -> SiLU -> SSM -> SiLU -> Linear -> x (residual)
     """
 
-    def __init__(self, config: MambaConfig, **kwargs):
+    def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int, **kwargs):
         if TENSORFLOW_AVAILABLE:
             super().__init__(**kwargs)
-        self.config = config
+        self.d_model = d_model
+        self.d_state = d_state
+        self.d_conv = d_conv
+        self.expand = expand
+        self._layers_created = False
 
     def build(self, input_shape):
-        if not TENSORFLOW_AVAILABLE:
+        """Create layers with proper shapes"""
+        if not TENSORFLOW_AVAILABLE or self._layers_created:
             return
 
-        d_inner = self.config.expand * self.config.d_model
+        d_inner = self.expand * self.d_model
 
         # Input projection
         self.in_proj = layers.Dense(d_inner * 2, use_bias=False, name='in_proj')
@@ -179,20 +190,23 @@ class MambaBlock(layers.Layer if TENSORFLOW_AVAILABLE else object):
         # Depthwise convolution
         self.conv1d = layers.Conv1D(
             filters=d_inner,
-            kernel_size=self.config.d_conv,
+            kernel_size=self.d_conv,
             padding='causal',
             groups=d_inner,  # Depthwise
             name='conv1d'
         )
 
         # Selective SSM
-        self.ssm = SelectiveSSM(d_inner, self.config.d_state, name='ssm')
+        self.ssm = SelectiveSSM(d_inner, self.d_state, name='ssm')
 
         # Output projection
-        self.out_proj = layers.Dense(self.config.d_model, use_bias=False, name='out_proj')
+        self.out_proj = layers.Dense(self.d_model, use_bias=False, name='out_proj')
 
         # Layer norm
         self.norm = layers.LayerNormalization(epsilon=1e-5, name='norm')
+
+        self._layers_created = True
+        super().build(input_shape)
 
     def call(self, x):
         """
@@ -229,6 +243,22 @@ class MambaBlock(layers.Layer if TENSORFLOW_AVAILABLE else object):
         # Residual
         return x + residual
 
+    def get_config(self):
+        """Return serializable config for layer saving"""
+        config = super().get_config() if TENSORFLOW_AVAILABLE else {}
+        config.update({
+            'd_model': self.d_model,
+            'd_state': self.d_state,
+            'd_conv': self.d_conv,
+            'expand': self.expand,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        """Create layer from config (for deserialization)"""
+        return cls(**config)
+
 
 class MambaModel(keras.Model if TENSORFLOW_AVAILABLE else object):
     """
@@ -236,36 +266,78 @@ class MambaModel(keras.Model if TENSORFLOW_AVAILABLE else object):
 
     Architecture:
         Embedding -> MambaBlocks x N -> Multi-head prediction
+
+    Properly implements Keras Model API with build() method for:
+    - Correct weight initialization
+    - Model serialization/deserialization
+    - GPU memory optimization
+    - Distributed training compatibility
     """
 
     def __init__(self, config: MambaConfig, **kwargs):
-        if TENSORFLOW_AVAILABLE:
-            super().__init__(**kwargs)
+        if not TENSORFLOW_AVAILABLE:
+            return
+
+        # Don't pass config to super().__init__() to avoid serialization warning
+        super().__init__(**kwargs)
         self.config = config
+        self._layers_created = False
 
-        if TENSORFLOW_AVAILABLE:
-            # Input embedding
-            self.embed = layers.Dense(config.d_model, name='embed')
-
-            # Mamba blocks
-            self.blocks = [
-                MambaBlock(config, name=f'mamba_block_{i}')
-                for i in range(config.num_layers)
-            ]
-
-            # Output heads (one per horizon)
-            self.output_heads = {
-                horizon: layers.Dense(1, name=f'head_{horizon}d')
-                for horizon in config.prediction_horizons
-            }
-
-            # Final layer norm
-            self.norm_f = layers.LayerNormalization(epsilon=1e-5, name='norm_f')
-
-    def call(self, x):
+    def build(self, input_shape):
         """
+        Create layers with proper input shapes
+
+        This is called automatically on first forward pass
+        Ensures proper weight initialization and serialization
+
+        Args:
+            input_shape: Shape of input tensor (batch, seq_len, features)
+        """
+        if not TENSORFLOW_AVAILABLE or self._layers_created:
+            return
+
+        # Extract dimensions (handle both tuple and TensorShape)
+        if isinstance(input_shape, (list, tuple)):
+            seq_len, n_features = input_shape[1:] if len(input_shape) > 2 else (None, input_shape[-1])
+        else:
+            # TensorShape object
+            dims = input_shape.as_list()
+            seq_len, n_features = dims[1:] if len(dims) > 2 else (None, dims[-1])
+
+        # Input embedding
+        self.embed = layers.Dense(self.config.d_model, name='embed')
+
+        # Mamba blocks
+        self.blocks = [
+            MambaBlock(
+                d_model=self.config.d_model,
+                d_state=self.config.d_state,
+                d_conv=self.config.d_conv,
+                expand=self.config.expand,
+                name=f'mamba_block_{i}'
+            )
+            for i in range(self.config.num_layers)
+        ]
+
+        # Output heads (one per horizon)
+        self.output_heads = {
+            horizon: layers.Dense(1, name=f'head_{horizon}d')
+            for horizon in self.config.prediction_horizons
+        }
+
+        # Final layer norm
+        self.norm_f = layers.LayerNormalization(epsilon=1e-5, name='norm_f')
+
+        self._layers_created = True
+        super().build(input_shape)
+
+    def call(self, x, training=False):
+        """
+        Forward pass
+
         Args:
             x: [batch_size, seq_len, n_features]
+            training: Whether in training mode
         Returns:
             predictions: Dict[horizon, [batch_size, 1]]
         """
@@ -291,6 +363,36 @@ class MambaModel(keras.Model if TENSORFLOW_AVAILABLE else object):
             predictions[horizon] = head(x_last)
 
         return predictions
+
+    def get_config(self):
+        """
+        Return serializable config for model saving
+
+        Required for proper Keras model serialization
+        """
+        return {
+            'd_model': self.config.d_model,
+            'd_state': self.config.d_state,
+            'd_conv': self.config.d_conv,
+            'expand': self.config.expand,
+            'num_layers': self.config.num_layers,
+            'prediction_horizons': self.config.prediction_horizons,
+        }
+
+    @classmethod
+    def from_config(cls, config_dict):
+        """
+        Create model from config (for deserialization)
+        """
+        mamba_config = MambaConfig(
+            d_model=config_dict['d_model'],
+            d_state=config_dict['d_state'],
+            d_conv=config_dict['d_conv'],
+            expand=config_dict['expand'],
+            num_layers=config_dict['num_layers'],
+            prediction_horizons=config_dict['prediction_horizons'],
+        )
+        return cls(config=mamba_config)
 
 
 class MambaPredictor:
@@ -421,29 +523,35 @@ class MambaPredictor:
                 for h in self.config.prediction_horizons
             }
 
-    def train(self, training_data: Dict[str, np.ndarray], epochs: int = 50):
+    def train(self, training_data: Dict[str, np.ndarray], epochs: int = 50,
+              validation_ratio: float = 0.2, patience: int = 10):
         """
-        Train Mamba model
+        Train Mamba model with proper temporal validation split.
+
+        IMPORTANT: Uses temporal split (NOT random) to prevent look-ahead bias.
+        First (1 - validation_ratio) of data is training, last validation_ratio is validation.
 
         Args:
             training_data: Dict[symbol, price_history]
             epochs: Training epochs
+            validation_ratio: Fraction of data to use for validation (default 0.2)
+            patience: Early stopping patience (default 10)
         """
         if not TENSORFLOW_AVAILABLE:
             logger.warning("TensorFlow not available - cannot train")
             return
 
-        logger.info(f"Training Mamba model for {epochs} epochs...")
+        logger.info(f"Training Mamba model for {epochs} epochs with temporal validation split...")
 
         # Prepare training dataset
-        X_train = []
-        y_train = {h: [] for h in self.config.prediction_horizons}
+        X_all = []
+        y_all = {h: [] for h in self.config.prediction_horizons}
 
         for symbol, prices in training_data.items():
             for i in range(60, len(prices) - max(self.config.prediction_horizons)):
                 # Features
                 features = self.prepare_features(prices[i-60:i])
-                X_train.append(features)
+                X_all.append(features)
 
                 # Labels (future returns)
                 current_price = prices[i]
@@ -451,12 +559,25 @@ class MambaPredictor:
                     if i + horizon < len(prices):
                         future_price = prices[i + horizon]
                         future_return = (future_price - current_price) / current_price
-                        y_train[horizon].append(future_return)
+                        y_all[horizon].append(future_return)
                     else:
-                        y_train[horizon].append(0.0)
+                        y_all[horizon].append(0.0)
 
-        X_train = np.array(X_train)
-        y_train = {h: np.array(y) for h, y in y_train.items()}
+        X_all = np.array(X_all)
+        y_all = {h: np.array(y) for h, y in y_all.items()}
+
+        # TEMPORAL SPLIT (NOT random!) - critical for time series
+        # First 80% = training, Last 20% = validation
+        n_samples = len(X_all)
+        split_idx = int(n_samples * (1 - validation_ratio))
+
+        X_train = X_all[:split_idx]
+        X_val = X_all[split_idx:]
+        y_train = {h: y[:split_idx] for h, y in y_all.items()}
+        y_val = {h: y[split_idx:] for h, y in y_all.items()}
+
+        logger.info(f"Temporal split: {split_idx} training samples, {n_samples - split_idx} validation samples")
+        logger.info("Training data is chronologically BEFORE validation data (no look-ahead bias)")
 
         # Compile model
         self.model.compile(
@@ -465,13 +586,22 @@ class MambaPredictor:
             metrics=['mae'] * len(self.config.prediction_horizons)
         )
 
-        # Train
+        # Early stopping callback
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=patience,
+            restore_best_weights=True,
+            verbose=1
+        )
+
+        # Train with explicit temporal validation data (NOT validation_split!)
         self.model.fit(
             X_train,
             y_train,
+            validation_data=(X_val, y_val),  # Explicit temporal validation set
             epochs=epochs,
             batch_size=32,
-            validation_split=0.2,
+            callbacks=[early_stopping],
             verbose=1
         )
 

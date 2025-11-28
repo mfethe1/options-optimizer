@@ -1,8 +1,10 @@
-import React from 'react';
-import { Activity, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Activity } from 'lucide-react';
 import { usePhase4Stream } from '../hooks/usePhase4Stream';
 import { Phase4Tech } from '../types/investor-report';
 import { SignalCard } from './SignalCard';
+import { DataFreshnessIndicator } from './DataFreshnessIndicator';
+import { Phase4SignalsPanelSkeleton } from './Skeletons';
 
 interface Props {
   userId: string;
@@ -26,8 +28,18 @@ export const Phase4SignalsPanel: React.FC<Props> = ({ userId, initialData }) => 
     maxReconnectAttempts: 5,
   });
 
+  // Track when data was last updated
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
   // Use WebSocket data if available, otherwise fall back to initial data
   const data = phase4Data || initialData;
+
+  // Update lastUpdated timestamp when phase4Data changes
+  useEffect(() => {
+    if (phase4Data) {
+      setLastUpdated(new Date());
+    }
+  }, [phase4Data]);
 
   return (
     <div className="bg-[#2a2a2a] border border-[#404040] rounded-lg p-6">
@@ -43,17 +55,28 @@ export const Phase4SignalsPanel: React.FC<Props> = ({ userId, initialData }) => 
           </p>
         </div>
 
-        {/* Real-time indicator */}
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'
-            }`}
-            aria-label={isConnected ? 'Connected' : 'Disconnected'}
+        {/* Real-time indicator and data freshness */}
+        <div className="flex items-center gap-3">
+          {/* Data Freshness Indicator */}
+          <DataFreshnessIndicator
+            lastUpdated={lastUpdated}
+            staleThresholdSeconds={45}   // Phase 4 updates every 30s, so 45s = stale
+            oldThresholdSeconds={120}    // 2 minutes = old data
+            showTimestamp={true}
           />
-          <span className="text-xs text-gray-400">
-            {isConnected ? 'Live' : 'Disconnected'}
-          </span>
+
+          {/* Connection Status */}
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full ${
+                isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'
+              }`}
+              aria-label={isConnected ? 'Connected' : 'Disconnected'}
+            />
+            <span className="text-xs text-gray-400">
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -137,14 +160,9 @@ export const Phase4SignalsPanel: React.FC<Props> = ({ userId, initialData }) => 
         </div>
       )}
 
-      {/* Loading State (when no data) */}
+      {/* Loading State (when no data) - Show skeleton instead of spinner */}
       {!data && !error && (
-        <div className="flex flex-col items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-500 mb-2" />
-          <span className="text-sm text-gray-500">
-            Loading Phase 4 metrics...
-          </span>
-        </div>
+        <Phase4SignalsPanelSkeleton />
       )}
 
     </div>

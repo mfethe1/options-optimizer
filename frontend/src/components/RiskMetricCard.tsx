@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Info, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react';
+import { Info, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Skeleton } from '@mui/material';
 
 interface RiskMetricCardProps {
   title: string;
@@ -39,14 +40,28 @@ export const RiskMetricCard: React.FC<RiskMetricCardProps> = ({
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Loading state
+  // Loading state - show skeleton instead of spinner
   if (loading) {
     return (
       <div className="p-4 bg-[#1a1a1a] border border-[#404040] rounded-lg">
-        <h3 className="text-sm font-semibold text-white mb-3">{title}</h3>
-        <div className="flex flex-col items-center justify-center h-24">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-500 mb-2" />
-          <span className="text-xs text-gray-500">Computing...</span>
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between mb-3">
+          <Skeleton variant="text" width={100} height={20} sx={{ bgcolor: '#404040' }} />
+          <Skeleton variant="circular" width={16} height={16} sx={{ bgcolor: '#404040' }} />
+        </div>
+        {/* Value skeleton */}
+        <Skeleton variant="text" width={70} height={32} sx={{ bgcolor: '#404040' }} />
+        {/* Trend indicator skeleton */}
+        <div className="flex items-center gap-1 mt-1">
+          <Skeleton variant="circular" width={16} height={16} sx={{ bgcolor: '#404040' }} />
+          <Skeleton variant="text" width={60} height={16} sx={{ bgcolor: '#404040' }} />
+        </div>
+        {/* Progress bar skeleton */}
+        <Skeleton variant="rectangular" width="100%" height={6} sx={{ bgcolor: '#404040', borderRadius: 1, mt: 2 }} />
+        {/* Threshold labels skeleton */}
+        <div className="flex justify-between mt-2">
+          <Skeleton variant="text" width={40} height={12} sx={{ bgcolor: '#404040' }} />
+          <Skeleton variant="text" width={50} height={12} sx={{ bgcolor: '#404040' }} />
         </div>
       </div>
     );

@@ -41,8 +41,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/swarm", tags=["swarm"])
 
 # Import limiter for rate limiting
+# Note: Rate limiting is now handled by middleware in rate_limiting.py
+# The limiter decorator below is a compatibility shim (no-op)
+# Actual rate limits are enforced by RateLimitMiddleware based on path patterns
 try:
-    from src.api.rate_limiter import limiter
+    from src.api.rate_limiting import limiter
     RATE_LIMITING_ENABLED = True
 except ImportError:
     logger.warning("Rate limiting not available")

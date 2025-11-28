@@ -1,12 +1,14 @@
 import React from 'react';
-import { Shield, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Shield, TrendingUp, TrendingDown, AlertTriangle, Clock } from 'lucide-react';
 import { RiskPanel } from '../types/investor-report';
 import { RiskMetricCard } from './RiskMetricCard';
+import { DataFreshnessIndicator } from './DataFreshnessIndicator';
 
 interface Props {
   riskPanel: RiskPanel;
   regime?: 'bull' | 'bear' | 'neutral';
   loading?: boolean;
+  lastUpdated?: Date | string | null;
 }
 
 /**
@@ -28,6 +30,7 @@ export const RiskPanelDashboard: React.FC<Props> = ({
   riskPanel,
   regime = 'neutral',
   loading = false,
+  lastUpdated = null,
 }) => {
   // Regime-based theme colors
   const getRegimeColor = (): string => {
@@ -69,14 +72,29 @@ export const RiskPanelDashboard: React.FC<Props> = ({
           </p>
         </div>
 
-        {/* Regime Indicator */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: regimeColor }}>
-          <div style={{ color: regimeColor }}>
-            {regimeIcon}
+        {/* Data Freshness and Regime Indicator */}
+        <div className="flex items-center gap-4">
+          {/* Data Freshness Indicator */}
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-400" />
+            <span className="text-xs text-gray-400">As of:</span>
+            <DataFreshnessIndicator
+              lastUpdated={lastUpdated}
+              staleThresholdSeconds={300}   // 5 minutes = stale for risk metrics
+              oldThresholdSeconds={900}     // 15 minutes = old
+              showTimestamp={true}
+            />
           </div>
-          <span className="text-sm font-semibold capitalize" style={{ color: regimeColor }}>
-            {regime} Regime
-          </span>
+
+          {/* Regime Indicator */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: regimeColor }}>
+            <div style={{ color: regimeColor }}>
+              {regimeIcon}
+            </div>
+            <span className="text-sm font-semibold capitalize" style={{ color: regimeColor }}>
+              {regime} Regime
+            </span>
+          </div>
         </div>
       </div>
 

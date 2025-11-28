@@ -117,20 +117,23 @@ class TestTFTLayers:
         from src.ml.advanced_forecasting.tft_model import VariableSelectionNetwork
         import tensorflow as tf
 
-        # 5 variables
-        layer = VariableSelectionNetwork(num_vars=5, hidden_units=16)
+        # Input: [batch=2, timesteps=5, features=8]
+        # num_features must match input's last dimension (features=8)
+        layer = VariableSelectionNetwork(num_features=8, hidden_units=16)
 
-        # Batch=2, num_vars=5, var_features=8
+        # Batch=2, timesteps=5, features=8
         x = tf.random.normal((2, 5, 8))
 
         # Build and call
         output, weights = layer(x)
 
-        # Output should be [batch, hidden_units]
-        assert output.shape == (2, 16)
+        # Output should be [batch, timesteps, hidden_units] for temporal data
+        # Implementation returns [batch, timesteps, hidden] per line 166 in tft_model.py
+        assert output.shape == (2, 5, 16)  # [batch, timesteps, hidden_units]
 
-        # Weights should be [batch, num_vars]
-        assert weights.shape == (2, 5)
+        # Weights (importance scores) should be [batch, num_features]
+        # Returns importance from line 168, which has shape [batch, num_features]
+        assert weights.shape == (2, 8)  # [batch, num_features=8]
 
         # Weights should sum to 1 (softmax)
         weight_sums = tf.reduce_sum(weights, axis=1)
@@ -336,6 +339,94 @@ class TestTFTUncertainty:
 
         # Generally increasing uncertainty (not strictly monotonic in practice)
         assert uncertainties[-1] > uncertainties[0]  # 30-day > 1-day
+
+
+class TestMultiHorizonTargets:
+    """Test multi-horizon target preparation (P1 fix for supervision signal bug)"""
+
+    @pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow not available")
+    def test_prepare_multi_horizon_targets(self):
+        """Test that prepare_multi_horizon_targets creates distinct targets per horizon"""
+        from src.ml.advanced_forecasting.tft_model import TemporalFusionTransformer
+
+        tft = TemporalFusionTransformer(horizons=[1, 5, 10, 30])
+
+        # Create price data with known pattern
+        prices = np.array([100 + i * 0.5 for i in range(100)])  # Linear increase
+
+        targets = tft.prepare_multi_horizon_targets(prices)
+
+        # Shape should be (n_samples, num_horizons)
+        assert targets.shape == (70, 4), f"Expected (70, 4), got {targets.shape}"
+
+        # Verify each horizon has DIFFERENT target values
+        # For a linear increase: return at horizon h = h * 0.5 / price_at_t
+        for i in range(len(targets)):
+            for j, h in enumerate([1, 5, 10, 30]):
+                current_price = prices[i]
+                future_price = prices[i + h]
+                expected_return = (future_price - current_price) / current_price
+                assert abs(targets[i, j] - expected_return) < 1e-6, \
+                    f"Mismatch at sample {i}, horizon {h}d"
+
+        # Verify columns are NOT identical (the original bug)
+        for j1 in range(4):
+            for j2 in range(j1 + 1, 4):
+                # Columns should be different
+                assert not np.allclose(targets[:, j1], targets[:, j2]), \
+                    f"Columns {j1} and {j2} are identical - multi-horizon bug!"
+
+    @pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow not available")
+    def test_prepare_training_data_alignment(self):
+        """Test that prepare_training_data correctly aligns X and y"""
+        from src.ml.advanced_forecasting.tft_model import TemporalFusionTransformer
+
+        tft = TemporalFusionTransformer(horizons=[1, 5, 10, 30])
+
+        # Create test data
+        n_timesteps = 150
+        n_features = 5
+        lookback = 60
+
+        prices = np.array([100 + i * 0.1 for i in range(n_timesteps)])
+        features = np.random.randn(n_timesteps, n_features)
+
+        X, y = tft.prepare_training_data(features, prices, lookback_steps=lookback)
+
+        # Expected samples: n_timesteps - lookback - max_horizon
+        expected_samples = n_timesteps - lookback - 30
+        assert X.shape == (expected_samples, lookback, n_features)
+        assert y.shape == (expected_samples, 4)
+
+        # Verify alignment: y[i] should be returns from end of X[i] window
+        for i in range(min(5, expected_samples)):
+            ref_idx = i + lookback - 1  # Last index in the lookback window
+            ref_price = prices[ref_idx]
+
+            for j, h in enumerate([1, 5, 10, 30]):
+                future_idx = ref_idx + h
+                expected_return = (prices[future_idx] - ref_price) / ref_price
+                assert abs(y[i, j] - expected_return) < 1e-6, \
+                    f"Alignment error at sample {i}, horizon {h}d"
+
+    @pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow not available")
+    def test_train_validates_y_shape(self):
+        """Test that train() rejects improperly shaped y_train"""
+        from src.ml.advanced_forecasting.tft_model import TemporalFusionTransformer
+
+        tft = TemporalFusionTransformer(horizons=[1, 5, 10, 30])
+
+        X_train = np.random.randn(100, 60, 10).astype(np.float32)
+
+        # Should reject 1D y_train
+        y_train_1d = np.random.randn(100).astype(np.float32)
+        with pytest.raises(ValueError, match="must be 2D"):
+            tft.train(X_train, y_train_1d, epochs=1)
+
+        # Should reject wrong number of horizon columns
+        y_train_wrong = np.random.randn(100, 2).astype(np.float32)  # Only 2 columns
+        with pytest.raises(ValueError, match="must have 4 columns"):
+            tft.train(X_train, y_train_wrong, epochs=1)
 
 
 if __name__ == '__main__':

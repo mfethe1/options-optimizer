@@ -7,10 +7,15 @@ Features:
 - Dynamic correlation graph construction
 - Multi-stock prediction using graph structure
 - 20-30% improvement via correlation exploitation
+
+Security:
+- All inputs validated via centralized validators
+- Symbol lists capped at MAX_SYMBOLS_PER_REQUEST (20)
+- Lookback days bounded to prevent resource exhaustion
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
@@ -22,6 +27,24 @@ from ..ml.graph_neural_network.stock_gnn import (
     StockGraph
 )
 
+# Import validators for security-hardened input validation
+from .validators import (
+    validate_symbol,
+    validate_symbols,
+    validate_symbols_csv,
+    validate_lookback_days,
+    validate_epochs,
+    validate_batch_size,
+    sanitize_log_input,
+    MAX_SYMBOLS_PER_REQUEST,
+    MIN_LOOKBACK_DAYS,
+    MAX_LOOKBACK_DAYS,
+    MIN_EPOCHS,
+    MAX_EPOCHS,
+    MIN_BATCH_SIZE,
+    MAX_BATCH_SIZE,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -31,9 +54,37 @@ graph_builder: Optional[CorrelationGraphBuilder] = None
 
 
 class GNNForecastRequest(BaseModel):
-    """Request for GNN-based forecast"""
-    symbols: List[str]
-    lookback_days: int = 20
+    """
+    Request for GNN-based forecast.
+
+    Security:
+    - Symbols validated and capped at MAX_SYMBOLS_PER_REQUEST
+    - Lookback days bounded to prevent resource exhaustion
+    """
+    symbols: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_SYMBOLS_PER_REQUEST,
+        description=f"List of stock symbols (1-{MAX_SYMBOLS_PER_REQUEST})"
+    )
+    lookback_days: int = Field(
+        default=20,
+        ge=MIN_LOOKBACK_DAYS,
+        le=MAX_LOOKBACK_DAYS,
+        description=f"Days of historical data ({MIN_LOOKBACK_DAYS}-{MAX_LOOKBACK_DAYS})"
+    )
+
+    @field_validator('symbols')
+    @classmethod
+    def validate_symbols_field(cls, v: List[str]) -> List[str]:
+        """Validate all symbols using centralized validator"""
+        return validate_symbols(v)
+
+    @field_validator('lookback_days')
+    @classmethod
+    def validate_lookback_field(cls, v: int) -> int:
+        """Validate lookback_days bounds"""
+        return validate_lookback_days(v)
 
 
 class GNNForecastResponse(BaseModel):
@@ -45,13 +96,67 @@ class GNNForecastResponse(BaseModel):
     graph_stats: Dict
     top_correlations: List[Dict]
 
+
 class GNNTrainRequest(BaseModel):
-    symbols: List[str]
-    lookback_days: int = 60
-    epochs: int = 10
-    batch_size: int = 32
+    """
+    Request for GNN training.
+
+    Security:
+    - At least 2 symbols required for correlation graph
+    - Epochs and batch_size bounded to prevent resource exhaustion
+    """
+    symbols: List[str] = Field(
+        ...,
+        min_length=2,
+        max_length=MAX_SYMBOLS_PER_REQUEST,
+        description=f"List of stock symbols (2-{MAX_SYMBOLS_PER_REQUEST}, minimum 2 for correlation)"
+    )
+    lookback_days: int = Field(
+        default=60,
+        ge=MIN_LOOKBACK_DAYS,
+        le=MAX_LOOKBACK_DAYS,
+        description=f"Days of historical data ({MIN_LOOKBACK_DAYS}-{MAX_LOOKBACK_DAYS})"
+    )
+    epochs: int = Field(
+        default=10,
+        ge=MIN_EPOCHS,
+        le=MAX_EPOCHS,
+        description=f"Training epochs ({MIN_EPOCHS}-{MAX_EPOCHS})"
+    )
+    batch_size: int = Field(
+        default=32,
+        ge=MIN_BATCH_SIZE,
+        le=MAX_BATCH_SIZE,
+        description=f"Batch size ({MIN_BATCH_SIZE}-{MAX_BATCH_SIZE})"
+    )
+
+    @field_validator('symbols')
+    @classmethod
+    def validate_symbols_field(cls, v: List[str]) -> List[str]:
+        """Validate symbols - need at least 2 for GNN"""
+        validated = validate_symbols(v)
+        if len(validated) < 2:
+            raise ValueError("At least 2 symbols required for GNN correlation graph")
+        return validated
+
+    @field_validator('lookback_days')
+    @classmethod
+    def validate_lookback_field(cls, v: int) -> int:
+        return validate_lookback_days(v)
+
+    @field_validator('epochs')
+    @classmethod
+    def validate_epochs_field(cls, v: int) -> int:
+        return validate_epochs(v)
+
+    @field_validator('batch_size')
+    @classmethod
+    def validate_batch_size_field(cls, v: int) -> int:
+        return validate_batch_size(v)
+
 
 class GNNTrainResponse(BaseModel):
+    """GNN training response"""
     status: str
     message: str
     results: Dict
@@ -105,15 +210,21 @@ async def get_gnn_forecast(request: GNNForecastRequest):
     for improved predictions.
     """
     # Ensure predictor matches requested symbols
-    global gnn_predictor
+    global gnn_predictor, graph_builder
+
+    # Lazily initialize graph_builder if needed
+    if graph_builder is None:
+        try:
+            graph_builder = CorrelationGraphBuilder(lookback_days=20, correlation_threshold=0.3)
+            logger.info("Graph builder initialized on-demand")
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Graph builder initialization failed: {e}")
+
     if gnn_predictor is None or set(gnn_predictor.symbols) != set(request.symbols):
         try:
             gnn_predictor = GNNPredictor(symbols=request.symbols)
         except Exception as e:
             raise HTTPException(status_code=503, detail=f"GNN initialization failed: {e}")
-
-    if graph_builder is None:
-        raise HTTPException(status_code=503, detail="GNN service not initialized")
 
     try:
         # Get recent price data for correlation
@@ -134,20 +245,14 @@ async def get_gnn_forecast(request: GNNForecastRequest):
                 # Price data for correlation
                 price_data[symbol] = hist['Close'].values[-request.lookback_days:]
 
-                # Features (simplified - use closing prices and returns)
-                returns = np.diff(hist['Close'].values) / hist['Close'].values[:-1]
-                feature_vector = np.concatenate([
-                    hist['Close'].values[-60:],  # Recent prices
-                    returns[-60:] if len(returns) >= 60 else np.zeros(60)  # Returns
-                ])
+                # Features: 3 features per node (volatility, momentum, volume_norm)
+                # Must match the model's expected node_feature_dim=3
+                returns = np.diff(hist['Close'].values) / (hist['Close'].values[:-1] + 1e-8)
+                volatility = np.std(returns) if len(returns) > 0 else 0.2
+                momentum = np.mean(returns) if len(returns) > 0 else 0.0
+                volume_norm = 1.0  # Placeholder for normalized volume
 
-                # Pad to 60 features if needed
-                if len(feature_vector) < 60:
-                    feature_vector = np.pad(feature_vector, (0, 60 - len(feature_vector)))
-                else:
-                    feature_vector = feature_vector[:60]
-
-                features[symbol] = feature_vector
+                features[symbol] = np.array([volatility, momentum, volume_norm])
 
             except Exception as e:
                 logger.warning(f"Error fetching data for {symbol}: {e}")
@@ -232,16 +337,13 @@ async def train_gnn(request: GNNTrainRequest):
                 if len(hist) < request.lookback_days:
                     continue
                 price_data[symbol] = hist['Close'].values[-request.lookback_days:]
-                returns = np.diff(hist['Close'].values) / hist['Close'].values[:-1]
-                feature_vector = np.concatenate([
-                    hist['Close'].values[-60:],
-                    returns[-60:] if len(returns) >= 60 else np.zeros(60)
-                ])
-                if len(feature_vector) < 60:
-                    feature_vector = np.pad(feature_vector, (0, 60 - len(feature_vector)))
-                else:
-                    feature_vector = feature_vector[:60]
-                features[symbol] = feature_vector
+                # Features: 3 features per node (volatility, momentum, volume_norm)
+                # Must match the model's expected node_feature_dim=3
+                returns = np.diff(hist['Close'].values) / (hist['Close'].values[:-1] + 1e-8)
+                volatility = np.std(returns) if len(returns) > 0 else 0.2
+                momentum = np.mean(returns) if len(returns) > 0 else 0.0
+                volume_norm = 1.0  # Placeholder
+                features[symbol] = np.array([volatility, momentum, volume_norm])
             except Exception:
                 continue
 
@@ -265,17 +367,36 @@ async def train_gnn(request: GNNTrainRequest):
 @router.get("/gnn/graph/{symbols}")
 async def get_correlation_graph(symbols: str, lookback_days: int = 20):
     """
-    Get correlation graph for symbols
+    Get correlation graph for symbols.
+
+    Security:
+    - Symbols validated to prevent injection
+    - Lookback days bounded to prevent resource exhaustion
 
     Args:
-        symbols: Comma-separated list of symbols
-        lookback_days: Days for correlation calculation
+        symbols: Comma-separated list of symbols (max 20)
+        lookback_days: Days for correlation calculation (5-5000)
     """
     if graph_builder is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
 
     try:
-        symbol_list = [s.strip() for s in symbols.split(',')]
+        # SECURITY: Validate comma-separated symbols
+        try:
+            symbol_list = validate_symbols_csv(symbols)
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.warning(f"[gnn/graph] Invalid symbols: {sanitize_log_input(symbols)}")
+            raise HTTPException(status_code=400, detail=f"Invalid symbols: {str(e)}")
+
+        # SECURITY: Validate lookback_days
+        try:
+            lookback_days = validate_lookback_days(lookback_days)
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid lookback_days: {str(e)}")
 
         # Get price data
         import yfinance as yf

@@ -94,7 +94,8 @@ def options_flow_composite(
     
     # Weighted composite (PCR 40%, Skew 40%, Volume 20% weight)
     base_signal = 0.4 * pcr_signal + 0.4 * skew_signal
-    composite = base_signal * (0.8 + 0.2 * volume_multiplier)
+    # Fix: Increase volume multiplier range from [0.8,1.2] to [0.7,1.3] for better amplification
+    composite = base_signal * (0.7 + 0.3 * volume_multiplier)
     
     logger.debug(f"Options flow: PCR={pcr:.2f} (signal={pcr_signal:.2f}), "
                  f"Skew={iv_skew:.3f} (signal={skew_signal:.2f}), "
@@ -291,17 +292,21 @@ def breadth_liquidity(
     # Advance/Decline ratio signal
     ad_ratio = advancing / total
     ad_signal = 2 * (ad_ratio - 0.5)  # Map [0,1] to [-1,1]
-    
-    # Volume signal (higher volume = more conviction)
-    vol_signal = np.clip((volume_ratio - 1.0) / 0.5, -1, 1)
-    
+
+    # Volume conviction multiplier (higher volume = amplify signal, not offset it)
+    # Fix: Volume should amplify the breadth signal, not be an independent component
+    volume_multiplier = min(volume_ratio / 1.0, 2.0)  # Cap at 2x
+
     # Liquidity signal (tighter spreads = better liquidity)
     if spread_bps is not None:
         # Typical spread: 5-20 bps; lower is better
         liquidity_signal = np.clip((15 - spread_bps) / 10, -1, 1)
-        composite = 0.5 * ad_signal + 0.3 * vol_signal + 0.2 * liquidity_signal
+        # Weighted: breadth 60%, liquidity 40%, then amplified by volume
+        base_signal = 0.6 * ad_signal + 0.4 * liquidity_signal
+        composite = base_signal * (0.8 + 0.2 * volume_multiplier)
     else:
-        composite = 0.6 * ad_signal + 0.4 * vol_signal
+        # Volume amplifies breadth signal (not an offset)
+        composite = ad_signal * (0.8 + 0.2 * volume_multiplier)
     
     logger.debug(f"Breadth/liquidity: A/D={advancing}/{declining} ({ad_ratio:.2%}), "
                  f"Vol={volume_ratio:.2f}x → Composite={composite:.2f}")

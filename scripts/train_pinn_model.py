@@ -21,11 +21,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def train_option_pricing_model():
-    """Train PINN option pricing model"""
+def train_option_pricing_model(epochs: int = 2000, n_samples: int = 20000, use_callbacks: bool = True):
+    """
+    Train PINN option pricing model with enhanced training features
+
+    Args:
+        epochs: Number of training epochs (default: 2000, increased from 1000)
+        n_samples: Number of physics samples (default: 20000, increased from 10000)
+        use_callbacks: Enable validation callbacks and early stopping
+    """
     logger.info("=" * 70)
     logger.info("Training PINN Option Pricing Model")
     logger.info("=" * 70)
+    logger.info(f"Configuration: epochs={epochs}, n_samples={n_samples}, callbacks={use_callbacks}")
 
     # Initialize model
     logger.info("\n1. Initializing PINN model...")
@@ -51,19 +59,110 @@ def train_option_pricing_model():
         bs_price = model.black_scholes_price(S=S, K=K, tau=tau)
         logger.info(f"  {desc:20s} | PINN: ${result['price']:8.4f} | BS: ${bs_price:8.4f} | Error: {abs(result['price'] - bs_price):6.2f}")
 
+    # Prepare validation data (20% of samples)
+    logger.info("\n3. Preparing validation data...")
+    n_val = n_samples // 5
+    S_val = np.random.uniform(50, 150, n_val)
+    tau_val = np.random.uniform(0.1, 2.0, n_val)
+    K_val = np.random.uniform(50, 150, n_val)
+
+    # Generate true labels using Black-Scholes
+    y_val = np.array([
+        model.black_scholes_price(S_val[i], K_val[i], tau_val[i])
+        for i in range(n_val)
+    ]).reshape(-1, 1)
+
+    x_val = np.stack([S_val, tau_val, K_val], axis=1).astype(np.float32)
+    validation_data = (x_val, y_val)
+
+    logger.info(f"   Validation set: {n_val} samples")
+
+    # Setup callbacks
+    callbacks = []
+    if use_callbacks:
+        try:
+            import tensorflow as tf
+            from tensorflow import keras
+
+            # Early stopping: Stop if validation loss doesn't improve for 100 epochs
+            early_stopping = keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                patience=100,
+                restore_best_weights=True,
+                verbose=1
+            )
+            callbacks.append(early_stopping)
+
+            # Reduce learning rate on plateau
+            reduce_lr = keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,
+                patience=50,
+                min_lr=1e-6,
+                verbose=1
+            )
+            callbacks.append(reduce_lr)
+
+            # Model checkpoint: Save best weights
+            checkpoint_path = os.path.join('models', 'pinn', 'option_pricing', 'best_weights.h5')
+            os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+
+            checkpoint = keras.callbacks.ModelCheckpoint(
+                checkpoint_path,
+                monitor='val_loss',
+                save_best_only=True,
+                save_weights_only=True,
+                verbose=1
+            )
+            callbacks.append(checkpoint)
+
+            # CSV Logger for training history
+            log_path = os.path.join('models', 'pinn', 'option_pricing', 'training_history.csv')
+            csv_logger = keras.callbacks.CSVLogger(log_path)
+            callbacks.append(csv_logger)
+
+            logger.info(f"   Callbacks enabled: EarlyStopping, ReduceLROnPlateau, ModelCheckpoint, CSVLogger")
+        except Exception as e:
+            logger.warning(f"   Could not setup callbacks: {e}")
+            callbacks = []
+
     # Train model
-    logger.info("\n3. Training PINN model with Black-Scholes PDE constraints...")
-    logger.info("   This may take a few minutes...")
-    model.train(
-        S_range=(50, 150),
-        K_range=(50, 150),
-        tau_range=(0.1, 2.0),
-        n_samples=10000,
-        epochs=1000
-    )
+    logger.info("\n4. Training PINN model with Black-Scholes PDE constraints...")
+    logger.info("   This may take several minutes...")
+    logger.info(f"   Progress: Training {epochs} epochs on {n_samples} physics samples")
+
+    try:
+        # Generate physics samples (no labels needed for physics loss!)
+        S_phys = np.random.uniform(50, 150, n_samples)
+        tau_phys = np.random.uniform(0.1, 2.0, n_samples)
+        K_phys = np.random.uniform(50, 150, n_samples)
+        x_phys = np.stack([S_phys, tau_phys, K_phys], axis=1).astype(np.float32)
+
+        # Train with validation
+        import tensorflow as tf
+        history = model.model.fit(
+            x_phys,
+            epochs=epochs,
+            batch_size=256,
+            verbose=1,  # Show progress bar
+            validation_data=validation_data,
+            callbacks=callbacks if callbacks else None
+        )
+
+        # Log final metrics
+        final_loss = history.history['loss'][-1]
+        final_val_loss = history.history['val_loss'][-1] if 'val_loss' in history.history else None
+
+        logger.info(f"\n   Final training loss: {final_loss:.6f}")
+        if final_val_loss:
+            logger.info(f"   Final validation loss: {final_val_loss:.6f}")
+
+    except Exception as e:
+        logger.error(f"   Training failed: {e}")
+        raise
 
     # Test trained model
-    logger.info("\n4. Testing trained model predictions...")
+    logger.info("\n5. Testing trained model predictions...")
     logger.info("\nTrained Model Predictions:")
     errors = []
     for S, K, tau, desc in test_cases:
@@ -81,7 +180,7 @@ def train_option_pricing_model():
     mean_error = np.mean(errors)
     max_error = np.max(errors)
 
-    logger.info("\n5. Training Summary:")
+    logger.info("\n6. Training Summary:")
     logger.info(f"   Mean Absolute Error: ${mean_error:.4f}")
     logger.info(f"   Max Absolute Error:  ${max_error:.4f}")
     logger.info(f"   Model Type: {result['method']}")
@@ -90,11 +189,21 @@ def train_option_pricing_model():
         logger.info("   ✓ Model training SUCCESSFUL! (error < $1.00)")
     else:
         logger.info("   ⚠ Model may need more training (error > $1.00)")
+        logger.info("   Recommendations:")
+        logger.info("     - Try increasing epochs to 3000+")
+        logger.info("     - Try increasing n_samples to 50000+")
+        logger.info("     - Run comprehensive validation: python scripts/validate_pinn_weights.py")
 
-    logger.info("\n6. Model weights saved to: models/pinn/option_pricing/weights.h5")
+    logger.info("\n7. Model weights saved to: models/pinn/option_pricing/model.weights.h5")
+    if callbacks:
+        logger.info("   Best weights saved to: models/pinn/option_pricing/best_weights.h5")
+        logger.info("   Training history saved to: models/pinn/option_pricing/training_history.csv")
+
     logger.info("\n" + "=" * 70)
     logger.info("PINN Training Complete!")
     logger.info("=" * 70)
+
+    return mean_error, max_error
 
 
 def test_portfolio_optimization():

@@ -114,8 +114,9 @@ class TestCorrelationGraphBuilder:
         builder = CorrelationGraphBuilder(lookback_days=20, correlation_threshold=0.7)
 
         # Create perfectly correlated stocks
+        # NOTE: Need 31+ prices to get 30+ returns for MIN_OBSERVATIONS_FOR_CORRELATION
         np.random.seed(42)
-        base_returns = np.random.randn(30)
+        base_returns = np.random.randn(35)  # 35 prices -> 34 returns > 30 min
         prices_a = 100 * np.cumprod(1 + 0.01 * base_returns)
         prices_b = 100 * np.cumprod(1 + 0.01 * base_returns)
 
@@ -153,6 +154,9 @@ class TestGNNPredictor:
         symbols = ['AAPL', 'MSFT']
         predictor = GNNPredictor(symbols=symbols)
 
+        # Force untrained state (ignore any auto-loaded weights from disk)
+        predictor.is_trained = False
+
         # Create synthetic data
         np.random.seed(42)
         price_data = {
@@ -161,8 +165,8 @@ class TestGNNPredictor:
         }
 
         features = {
-            'AAPL': np.random.randn(60),
-            'MSFT': np.random.randn(60)
+            'AAPL': np.random.randn(3),
+            'MSFT': np.random.randn(3)
         }
 
         predictions = await predictor.predict(price_data, features)
@@ -187,7 +191,7 @@ class TestGNNPredictor:
 
         for symbol in symbols:
             price_data[symbol] = 100 * np.cumprod(1 + 0.01 * np.random.randn(50))
-            features[symbol] = np.random.randn(60)
+            features[symbol] = np.random.randn(3)
 
         # Train
         result = await predictor.train(
@@ -220,7 +224,7 @@ class TestGNNPredictor:
             'C': 100 * np.cumprod(1 + 0.01 * np.random.randn(50))
         }
 
-        features = {sym: np.random.randn(60) for sym in symbols}
+        features = {sym: np.random.randn(3) for sym in symbols}
 
         # Train
         train_result = await predictor.train(price_data, features, epochs=10)

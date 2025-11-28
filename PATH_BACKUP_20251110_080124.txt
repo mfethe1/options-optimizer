@@ -1,0 +1,5 @@
+﻿=== USER PATH ORIGINAL ===
+C:\Program Files\nodejs;C:\Users\mfeth\AppData\Roaming\npm;%PATH%;C:\Users\mfeth\AppData\Roaming\npm;%PATH%;C:\Users\mfeth\AppData\Roaming\npm;C:\Users\mfeth\AppData\Roaming\npm;c:\Users\mfeth\.vscode\extensions\ms-python.debugpy-2025.14.1-win32-x64\bundled\scripts\noConfigScripts;C:\Users\mfeth\AppData\Roaming\npm
+
+=== MACHINE PATH ORIGINAL ===
+C:\Program Files\nodejs;C:\Users\mfeth\AppData\Roaming\npm;%PATH%;C:\Users\mfeth\AppData\Roaming\npm;%PATH%;C:\Users\mfeth\AppData\Roaming\npm;C:\Users\mfeth\AppData\Roaming\npm;c:\Users\mfeth\.vscode\extensions\ms-python.debugpy-2025.14.1-win32-x64\bundled\scripts\noConfigScripts;C:\Users\mfeth\AppData\Roaming\npm

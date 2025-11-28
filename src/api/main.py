@@ -33,9 +33,10 @@ from .auth_routes import router as auth_router
 from .unified_routes import router as unified_router
 from ..agents.coordinator import CoordinatorAgent
 from ..analytics import GreeksCalculator, EVCalculator
-from .rate_limiter import setup_rate_limiting, limiter, custom_limit
+from .rate_limiting import setup_rate_limiting, limiter, custom_limit
 from .monitoring import setup_sentry, PrometheusMiddleware, get_metrics
 from .health import get_detailed_health
+from .pinn_health_routes import router as pinn_health_router
 from .cache import get_cache_stats, clear_cache, clear_expired, invalidate_pattern
 from .agent_stream import agent_stream_websocket, agent_stream_manager
 
@@ -71,15 +72,21 @@ app = FastAPI(
 setup_sentry()
 
 # Setup rate limiting (MUST be before other middleware)
+# This protects expensive endpoints from abuse:
+# - /api/swarm/*: 5/min (multi-agent LLM analysis)
+# - /api/*/train: 2/5min (GPU-intensive training)
+# - /api/forecast/*: 30/min (ML inference)
+# - /api/*: 100/min (default)
 setup_rate_limiting(app)
+logger.info("Rate limiting middleware enabled - protecting expensive endpoints")
 
 # Add Prometheus monitoring middleware
-app.add_middleware(PrometheusMiddleware)
-logger.info("Prometheus monitoring middleware added")
+# app.add_middleware(PrometheusMiddleware)
+logger.info("Prometheus monitoring middleware skipped")
 
 # Add timing middleware for latency observability
-app.add_middleware(TimingMiddleware)
-logger.info("Timing middleware added for performance monitoring")
+# app.add_middleware(TimingMiddleware)
+logger.info("Timing middleware skipped to support WebSockets")
 
 # CORS middleware
 app.add_middleware(
@@ -98,41 +105,42 @@ async def startup_event():
     await agent_stream_manager.start_heartbeat()
     logger.info("Agent stream manager initialized")
 
-    # Initialize institutional data aggregator
-    try:
-        from .market_data_routes import initialize_data_aggregator
-
-        # Load API keys from environment
-        api_keys = {}
-
-        # Polygon.io
-        if os.getenv("POLYGON_API_KEY"):
-            api_keys["polygon"] = os.getenv("POLYGON_API_KEY")
-            logger.info("Polygon API key loaded")
-
-        # Alpaca
-        if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
-            api_keys["alpaca_key"] = os.getenv("ALPACA_API_KEY")
-            api_keys["alpaca_secret"] = os.getenv("ALPACA_SECRET_KEY")
-            logger.info("Alpaca API credentials loaded")
-
-        # Finnhub
-        if os.getenv("FINNHUB_API_KEY"):
-            api_keys["finnhub"] = os.getenv("FINNHUB_API_KEY")
-            logger.info("Finnhub API key loaded")
-
-        # IEX Cloud
-        if os.getenv("IEX_CLOUD_API_KEY"):
-            api_keys["iex_cloud"] = os.getenv("IEX_CLOUD_API_KEY")
-            logger.info("IEX Cloud API key loaded")
-
-        if api_keys:
-            await initialize_data_aggregator(api_keys)
-            logger.info(f"Institutional data aggregator initialized with {len(api_keys)} providers")
-        else:
-            logger.warning("No market data API keys found - data aggregator not initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize data aggregator: {e}")
+    # TEMPORARILY DISABLED: Initialize institutional data aggregator - COMMENTED OUT TO FIX STARTUP BLOCKING
+    # try:
+    #     from .market_data_routes import initialize_data_aggregator
+    #
+    #     # Load API keys from environment
+    #     api_keys = {}
+    #
+    #     # Polygon.io
+    #     if os.getenv("POLYGON_API_KEY"):
+    #         api_keys["polygon"] = os.getenv("POLYGON_API_KEY")
+    #         logger.info("Polygon API key loaded")
+    #
+    #     # Alpaca
+    #     if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
+    #         api_keys["alpaca_key"] = os.getenv("ALPACA_API_KEY")
+    #         api_keys["alpaca_secret"] = os.getenv("ALPACA_SECRET_KEY")
+    #         logger.info("Alpaca API credentials loaded")
+    #
+    #     # Finnhub
+    #     if os.getenv("FINNHUB_API_KEY"):
+    #         api_keys["finnhub"] = os.getenv("FINNHUB_API_KEY")
+    #         logger.info("Finnhub API key loaded")
+    #
+    #     # IEX Cloud
+    #     if os.getenv("IEX_CLOUD_API_KEY"):
+    #         api_keys["iex_cloud"] = os.getenv("IEX_CLOUD_API_KEY")
+    #         logger.info("IEX Cloud API key loaded")
+    #
+    #     if api_keys:
+    #         await initialize_data_aggregator(api_keys)
+    #         logger.info(f"Institutional data aggregator initialized with {len(api_keys)} providers")
+    #     else:
+    #         logger.warning("No market data API keys found - data aggregator not initialized")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize data aggregator: {e}")
+    logger.info("Institutional data aggregator initialization skipped (will initialize on-demand)")
 
     # Initialize smart order router - TEMPORARILY DISABLED TO FIX STARTUP BLOCKING
     # try:
@@ -184,53 +192,59 @@ async def startup_event():
     # except Exception as e:
     #     logger.error(f"Failed to initialize broker manager: {e}")
 
-    # Initialize epidemic volatility service
-    try:
-        from .epidemic_volatility_routes import initialize_epidemic_service
-        await initialize_epidemic_service()
-        logger.info("Epidemic volatility service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize epidemic volatility service: {e}")
+    # TEMPORARILY DISABLED: Initialize epidemic volatility service - COMMENTED OUT TO FIX STARTUP BLOCKING
+    # try:
+    #     from .epidemic_volatility_routes import initialize_epidemic_service
+    #     await initialize_epidemic_service()
+    #     logger.info("Epidemic volatility service initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize epidemic volatility service: {e}")
+    logger.info("Epidemic volatility service initialization skipped (will initialize on-demand)")
 
-    # Initialize advanced forecasting service (Priority #1: TFT + Conformal)
-    try:
-        from .advanced_forecast_routes import initialize_advanced_forecast_service
-        await initialize_advanced_forecast_service()
-        logger.info("Advanced forecasting service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize advanced forecasting service: {e}")
+    # TEMPORARILY DISABLED: Initialize advanced forecasting service (Priority #1: TFT + Conformal) - COMMENTED OUT TO FIX STARTUP BLOCKING
+    # try:
+    #     from .advanced_forecast_routes import initialize_advanced_forecast_service
+    #     await initialize_advanced_forecast_service()
+    #     logger.info("Advanced forecasting service initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize advanced forecasting service: {e}")
+    logger.info("Advanced forecasting service initialization skipped (will initialize on-demand)")
 
-    # Initialize GNN service (Priority #2: Graph Neural Networks)
-    try:
-        from .gnn_routes import initialize_gnn_service
-        await initialize_gnn_service()
-        logger.info("GNN service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize GNN service: {e}")
+    # TEMPORARILY DISABLED: Initialize GNN service (Priority #2: Graph Neural Networks) - COMMENTED OUT TO FIX STARTUP BLOCKING
+    # try:
+    #     from .gnn_routes import initialize_gnn_service
+    #     await initialize_gnn_service()
+    #     logger.info("GNN service initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize GNN service: {e}")
+    logger.info("GNN service initialization skipped (will initialize on-demand)")
 
-    # Initialize Mamba service (Priority #3: State Space Model - Linear Complexity)
-    try:
-        from .mamba_routes import initialize_mamba_service
-        await initialize_mamba_service()
-        logger.info("Mamba service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize Mamba service: {e}")
+    # TEMPORARILY DISABLED: Initialize Mamba service (Priority #3: State Space Model - Linear Complexity) - COMMENTED OUT TO FIX STARTUP BLOCKING
+    # try:
+    #     from .mamba_routes import initialize_mamba_service
+    #     await initialize_mamba_service()
+    #     logger.info("Mamba service initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize Mamba service: {e}")
+    logger.info("Mamba service initialization skipped (will initialize on-demand)")
 
-    # Initialize PINN service (Priority #4: Physics-Informed Neural Networks)
-    try:
-        from .pinn_routes import initialize_pinn_service
-        await initialize_pinn_service()
-        logger.info("PINN service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize PINN service: {e}")
+    # TEMPORARILY DISABLED: Initialize PINN service (Priority #4: Physics-Informed Neural Networks) - COMMENTED OUT TO FIX STARTUP BLOCKING
+    # try:
+    #     from .pinn_routes import initialize_pinn_service
+    #     await initialize_pinn_service()
+    #     logger.info("PINN service initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize PINN service: {e}")
+    logger.info("PINN service initialization skipped (will initialize on-demand)")
 
-    # Initialize Ensemble service (Multi-Model Neural Network Ensemble)
-    try:
-        from .ensemble_routes import initialize_ensemble_service
-        await initialize_ensemble_service()
-        logger.info("Ensemble service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize Ensemble service: {e}")
+    # TEMPORARILY DISABLED: Initialize Ensemble service (Multi-Model Neural Network Ensemble) - COMMENTED OUT TO FIX STARTUP BLOCKING
+    # try:
+    #     from .ensemble_routes import initialize_ensemble_service
+    #     await initialize_ensemble_service()
+    #     logger.info("Ensemble service initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize Ensemble service: {e}")
+    logger.info("Ensemble service initialization skipped (will initialize on-demand)")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -497,6 +511,13 @@ try:
 except Exception as e:
     logger.warning(f"Could not register PINN routes: {e}")
 
+# Include PINN Health Check routes (Deployment monitoring)
+try:
+    app.include_router(pinn_health_router)
+    logger.info("PINN Health Check routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register PINN Health Check routes: {e}")
+
 # Include Ensemble routes (Multi-Model Neural Network Ensemble)
 try:
     from .ensemble_routes import router as ensemble_router
@@ -511,6 +532,14 @@ try:
     logger.info("Model Management routes registered successfully")
 except Exception as e:
     logger.warning(f"Could not register Model Management routes: {e}")
+
+# Include Truth Dashboard routes (Prediction accuracy tracking)
+try:
+    from .truth_dashboard_routes import router as truth_dashboard_router
+    app.include_router(truth_dashboard_router)
+    logger.info("Truth Dashboard routes registered successfully")
+except Exception as e:
+    logger.warning(f"Could not register Truth Dashboard routes: {e}")
 
 # Debug: TensorFlow import status inside API process
 @app.get("/debug/tf")
@@ -665,6 +694,13 @@ async def root():
                 "phase4_metrics": "/ws/phase4-metrics/{user_id}",
                 "market_data_stream": "/api/market-data/ws/stream/{symbol}",
                 "market_data_multi": "/api/market-data/ws/stream-multi"
+            },
+            "truth_dashboard": {
+                "daily_accuracy": "/api/truth/daily-accuracy",
+                "model_history": "/api/truth/model/{model_name}/history",
+                "record_prediction": "/api/truth/record-prediction",
+                "validate_predictions": "/api/truth/validate-predictions",
+                "summary": "/api/truth/summary"
             }
         }
     }

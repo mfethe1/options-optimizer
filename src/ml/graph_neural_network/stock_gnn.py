@@ -150,7 +150,7 @@ class StockGNN:
 
     def __init__(self,
                  num_stocks: int = 500,
-                 node_feature_dim: int = 60,
+                 node_feature_dim: int = 3,
                  hidden_dim: int = 128,
                  num_gcn_layers: int = 3,
                  num_gat_heads: int = 4):
@@ -233,6 +233,9 @@ class StockGNN:
 class CorrelationGraphBuilder:
     """Builds dynamic correlation graphs from stock data"""
 
+    # Minimum observations needed for reliable correlation estimation
+    MIN_OBSERVATIONS_FOR_CORRELATION = 30
+
     def __init__(self, lookback_days: int = 20, correlation_threshold: float = 0.3):
         """
         Args:
@@ -242,36 +245,84 @@ class CorrelationGraphBuilder:
         self.lookback_days = lookback_days
         self.correlation_threshold = correlation_threshold
 
+    def build_correlation_matrix(self,
+                                  returns: Dict[str, np.ndarray],
+                                  symbols: List[str],
+                                  up_to_index: Optional[int] = None) -> np.ndarray:
+        """
+        Build correlation matrix using only data up to specified index.
+
+        This method prevents look-ahead bias by ensuring correlations are computed
+        using only historical data available at the prediction point.
+
+        Args:
+            returns: Dict of symbol -> return series
+            symbols: List of symbols in order
+            up_to_index: Only use data[:up_to_index+1]. If None, use all data
+                        (appropriate only for final/live prediction, not backtesting)
+
+        Returns:
+            Correlation matrix of shape [n_symbols, n_symbols]
+        """
+        n_stocks = len(symbols)
+        corr_matrix = np.eye(n_stocks)  # Start with identity (self-correlation = 1)
+
+        for i, sym1 in enumerate(symbols):
+            for j, sym2 in enumerate(symbols):
+                if i < j:  # Only compute upper triangle, then mirror
+                    # Use expanding window: only data up to current point
+                    if up_to_index is not None:
+                        r1 = returns[sym1][:up_to_index + 1]
+                        r2 = returns[sym2][:up_to_index + 1]
+                    else:
+                        r1 = returns[sym1]
+                        r2 = returns[sym2]
+
+                    # Require minimum observations for reliable correlation
+                    if len(r1) >= self.MIN_OBSERVATIONS_FOR_CORRELATION and len(r2) >= self.MIN_OBSERVATIONS_FOR_CORRELATION:
+                        # Handle potential length mismatch
+                        min_len = min(len(r1), len(r2))
+                        r1 = r1[:min_len]
+                        r2 = r2[:min_len]
+
+                        corr = np.corrcoef(r1, r2)[0, 1]
+                        if not np.isnan(corr):
+                            corr_matrix[i, j] = corr
+                            corr_matrix[j, i] = corr
+                    # else: leave as 0 (no edge) for insufficient data
+
+        return corr_matrix
+
     def build_graph(self,
                    price_data: Dict[str, np.ndarray],
-                   features: Dict[str, np.ndarray]) -> StockGraph:
+                   features: Dict[str, np.ndarray],
+                   up_to_index: Optional[int] = None) -> StockGraph:
         """
-        Build correlation graph from recent price data
+        Build correlation graph from price data.
+
+        IMPORTANT: For backtesting, always pass up_to_index to prevent look-ahead bias.
+        Only omit up_to_index for live/final predictions where all data is historical.
 
         Args:
             price_data: {symbol: price_array}
             features: {symbol: feature_array}
+            up_to_index: Only use price data[:up_to_index+1] for correlation calculation.
+                        If None, uses all data (only safe for live predictions).
 
         Returns:
-            StockGraph
+            StockGraph with correlation matrix computed without look-ahead bias
         """
         symbols = list(price_data.keys())
         n_stocks = len(symbols)
 
-        # Calculate return correlations
+        # Calculate returns from prices
         returns = {}
         for symbol, prices in price_data.items():
-            returns[symbol] = np.diff(prices) / prices[:-1]
+            # Compute returns: (p[t] - p[t-1]) / p[t-1]
+            returns[symbol] = np.diff(prices) / (prices[:-1] + 1e-10)
 
-        # Correlation matrix
-        corr_matrix = np.zeros((n_stocks, n_stocks))
-        for i, sym1 in enumerate(symbols):
-            for j, sym2 in enumerate(symbols):
-                if i == j:
-                    corr_matrix[i, j] = 1.0
-                else:
-                    corr = np.corrcoef(returns[sym1], returns[sym2])[0, 1]
-                    corr_matrix[i, j] = corr if not np.isnan(corr) else 0.0
+        # Build correlation matrix using expanding window (no look-ahead)
+        corr_matrix = self.build_correlation_matrix(returns, symbols, up_to_index)
 
         # Create edge list (only strong correlations)
         edge_index = []
@@ -304,9 +355,10 @@ class CorrelationGraphBuilder:
 class GNNPredictor:
     """High-level GNN-based stock predictor"""
 
-    def __init__(self, symbols: List[str]):
+    def __init__(self, symbols: List[str], node_feature_dim: int = 3):
         self.symbols = symbols
-        self.gnn = StockGNN(num_stocks=len(symbols))
+        self.node_feature_dim = node_feature_dim
+        self.gnn = StockGNN(num_stocks=len(symbols), node_feature_dim=node_feature_dim)
         self.graph_builder = CorrelationGraphBuilder()
         self.is_trained = False
         # Attempt to load persisted weights
@@ -320,19 +372,25 @@ class GNNPredictor:
 
     async def predict(self,
                      price_data: Dict[str, np.ndarray],
-                     features: Dict[str, np.ndarray]) -> Dict[str, float]:
+                     features: Dict[str, np.ndarray],
+                     up_to_index: Optional[int] = None) -> Dict[str, float]:
         """
-        Predict using GNN with correlation structure
+        Predict using GNN with correlation structure.
+
+        For live predictions, up_to_index can be None since all data is historical.
+        For backtesting, pass up_to_index to prevent look-ahead bias.
 
         Args:
             price_data: Recent prices for correlation
             features: Current features per stock
+            up_to_index: For backtesting - only use data[:up_to_index+1] for correlations.
+                        None = use all data (safe for live predictions only)
 
         Returns:
             {symbol: predicted_return}
         """
-        # Build graph
-        graph = self.graph_builder.build_graph(price_data, features)
+        # Build graph with optional time-point restriction (prevents look-ahead bias)
+        graph = self.graph_builder.build_graph(price_data, features, up_to_index=up_to_index)
 
         # Prepare inputs
         node_features = graph.node_features.reshape(1, len(self.symbols), -1)
@@ -353,10 +411,25 @@ class GNNPredictor:
                     price_data: Dict[str, np.ndarray],
                     features: Dict[str, np.ndarray],
                     epochs: int = 10,
-                    batch_size: int = 32) -> Dict:
+                    batch_size: int = 32,
+                    use_expanding_window: bool = True) -> Dict:
         """
-        Minimal training loop using next-day returns as supervision.
-        Builds a single-snapshot batch for demonstration/training bootstrap.
+        Training loop using next-day returns as supervision.
+
+        IMPORTANT: Uses expanding window correlations to prevent look-ahead bias.
+        At each time step t, correlations are computed using only data[:t+1].
+
+        Args:
+            price_data: Dict of symbol -> price array
+            features: Dict of symbol -> feature array
+            epochs: Number of training epochs
+            batch_size: Batch size for training
+            use_expanding_window: If True (default), builds multiple training samples
+                                  with expanding correlations. If False, uses final
+                                  correlation snapshot only (legacy behavior, biased).
+
+        Returns:
+            Training statistics dict
         """
         if not TENSORFLOW_AVAILABLE:
             raise ImportError("TensorFlow required")
@@ -365,33 +438,93 @@ class GNNPredictor:
         if self.gnn.model is None:
             self.gnn.build_model()
 
-        # Graph snapshot
-        graph = self.graph_builder.build_graph(price_data, features)
-        node_features = graph.node_features.reshape(1, len(self.symbols), -1)
-        adj_matrix = graph.correlation_matrix.reshape(1, len(self.symbols), len(self.symbols))
+        symbols = list(price_data.keys())
+        min_samples = CorrelationGraphBuilder.MIN_OBSERVATIONS_FOR_CORRELATION
 
-        # Targets: approximate next-day return using last two closes
-        targets = []
-        for sym in graph.symbols:
-            prices = price_data[sym]
-            if len(prices) >= 2:
-                r = (prices[-1] - prices[-2]) / (prices[-2] + 1e-8)
-            else:
-                r = 0.0
-            targets.append([r])
-        y = np.array(targets, dtype=np.float32).reshape(1, len(self.symbols), 1)
+        # Determine the length of available data
+        first_symbol = symbols[0]
+        data_length = len(price_data[first_symbol])
 
-        history = self.gnn.model.fit([node_features, adj_matrix], y,
-                                     epochs=epochs,
-                                     batch_size=1,
-                                     verbose=0)
+        if use_expanding_window and data_length > min_samples + 1:
+            # Generate training samples with expanding window correlations
+            # This prevents look-ahead bias during training
+            all_node_features = []
+            all_adj_matrices = []
+            all_targets = []
+
+            # Start from minimum required for correlation, go to second-to-last
+            # (need t+1 for next-day return target)
+            for t in range(min_samples, data_length - 1):
+                # Build graph using only data up to time t (no look-ahead)
+                graph = self.graph_builder.build_graph(
+                    price_data, features, up_to_index=t
+                )
+
+                node_feat = graph.node_features.reshape(len(self.symbols), -1)
+                adj_mat = graph.correlation_matrix
+
+                # Target: next-day return at t+1
+                targets = []
+                for sym in symbols:
+                    prices = price_data[sym]
+                    r = (prices[t + 1] - prices[t]) / (prices[t] + 1e-8)
+                    targets.append([r])
+
+                all_node_features.append(node_feat)
+                all_adj_matrices.append(adj_mat)
+                all_targets.append(targets)
+
+            # Stack into batches
+            X_nodes = np.array(all_node_features, dtype=np.float32)
+            X_adj = np.array(all_adj_matrices, dtype=np.float32)
+            y = np.array(all_targets, dtype=np.float32)
+
+            logger.info(f"Training GNN with {len(X_nodes)} expanding-window samples (no look-ahead bias)")
+
+            history = self.gnn.model.fit(
+                [X_nodes, X_adj], y,
+                epochs=epochs,
+                batch_size=min(batch_size, len(X_nodes)),
+                verbose=0
+            )
+        else:
+            # Fallback: single snapshot at end of data (for minimal bootstrap)
+            # NOTE: This uses all data for correlation - acceptable only for initial
+            # model bootstrap, not for proper training/validation
+            logger.warning("Using single-snapshot training (potential look-ahead bias)")
+
+            graph = self.graph_builder.build_graph(price_data, features)
+            node_features = graph.node_features.reshape(1, len(self.symbols), -1)
+            adj_matrix = graph.correlation_matrix.reshape(1, len(self.symbols), len(self.symbols))
+
+            # Targets: last return
+            targets = []
+            for sym in symbols:
+                prices = price_data[sym]
+                if len(prices) >= 2:
+                    r = (prices[-1] - prices[-2]) / (prices[-2] + 1e-8)
+                else:
+                    r = 0.0
+                targets.append([r])
+            y = np.array(targets, dtype=np.float32).reshape(1, len(self.symbols), 1)
+
+            history = self.gnn.model.fit(
+                [node_features, adj_matrix], y,
+                epochs=epochs,
+                batch_size=1,
+                verbose=0
+            )
+
         # Persist
         weights_path = os.path.join('models', 'gnn', 'weights.weights.h5')
         self.gnn.save_weights(weights_path)
         self.is_trained = True
+
         return {
             'epochs': epochs,
             'final_loss': float(history.history['loss'][-1]),
             'weights_path': weights_path,
-            'num_nodes': len(self.symbols)
+            'num_nodes': len(self.symbols),
+            'expanding_window': use_expanding_window,
+            'training_samples': len(X_nodes) if use_expanding_window and data_length > min_samples + 1 else 1
         }

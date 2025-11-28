@@ -9,9 +9,9 @@ export default defineConfig({
     strictPort: true, // Fail if port is already in use
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:9001',
+        target: process.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        // No rewrite needed - backend now expects /api prefix
         ws: true, // Enable WebSocket proxying
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
@@ -24,7 +24,7 @@ export default defineConfig({
       },
       // WebSocket proxy for agent streaming
       '/ws': {
-        target: 'ws://127.0.0.1:9001',
+        target: process.env.VITE_WS_BASE_URL || 'ws://127.0.0.1:8000',
         ws: true,
         changeOrigin: true,
       },
@@ -33,7 +33,7 @@ export default defineConfig({
   define: {
     // Make API URL available at build time
     'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
-      process.env.VITE_API_BASE_URL || 'http://127.0.0.1:9001'
+      process.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
     ),
   },
 })

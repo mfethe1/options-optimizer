@@ -7,10 +7,15 @@ Applications:
 3. 15-100x data efficiency through physics constraints
 
 Research: "Physics-Informed Neural Networks" (Raissi et al., 2019)
+
+Security:
+- All numerical inputs validated within reasonable bounds
+- Option parameters bounded to prevent numerical instability
+- Portfolio symbols capped at MAX_SYMBOLS_PER_REQUEST
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
@@ -19,6 +24,40 @@ import numpy as np
 from ..ml.physics_informed.general_pinn import (
     OptionPricingPINN,
     PortfolioPINN
+)
+
+# Import validators for security-hardened input validation
+from .validators import (
+    validate_symbol,
+    validate_symbols,
+    validate_price,
+    validate_strike_price,
+    validate_time_to_maturity,
+    validate_volatility,
+    validate_risk_free_rate,
+    validate_epochs,
+    validate_option_type,
+    validate_lookback_days,
+    validate_target_return,
+    validate_model_type,
+    sanitize_log_input,
+    MAX_SYMBOLS_PER_REQUEST,
+    MIN_PRICE,
+    MAX_PRICE,
+    MIN_STRIKE,
+    MAX_STRIKE,
+    MIN_TIME_TO_MATURITY,
+    MAX_TIME_TO_MATURITY,
+    MIN_VOLATILITY,
+    MAX_VOLATILITY,
+    MIN_RISK_FREE_RATE,
+    MAX_RISK_FREE_RATE,
+    MIN_EPOCHS,
+    MAX_EPOCHS,
+    MIN_LOOKBACK_DAYS,
+    MAX_LOOKBACK_DAYS,
+    VALID_OPTION_TYPES,
+    VALID_PINN_MODEL_TYPES,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,13 +69,77 @@ portfolio_model: Optional[PortfolioPINN] = None
 
 
 class OptionPriceRequest(BaseModel):
-    """Request for option pricing"""
-    stock_price: float
-    strike_price: float
-    time_to_maturity: float  # Years
-    option_type: str = 'call'  # 'call' or 'put'
-    risk_free_rate: float = 0.05
-    volatility: float = 0.2
+    """
+    Request for option pricing.
+
+    Security:
+    - All numerical values bounded to prevent overflow/underflow
+    - Option type validated against allowed values
+    """
+    stock_price: float = Field(
+        ...,
+        gt=0,
+        le=MAX_PRICE,
+        description=f"Current stock price (0.01-{MAX_PRICE})"
+    )
+    strike_price: float = Field(
+        ...,
+        gt=0,
+        le=MAX_STRIKE,
+        description=f"Option strike price (0.01-{MAX_STRIKE})"
+    )
+    time_to_maturity: float = Field(
+        ...,
+        gt=MIN_TIME_TO_MATURITY,
+        le=MAX_TIME_TO_MATURITY,
+        description=f"Time to maturity in years ({MIN_TIME_TO_MATURITY}-{MAX_TIME_TO_MATURITY})"
+    )
+    option_type: str = Field(
+        default='call',
+        description="Option type: 'call' or 'put'"
+    )
+    risk_free_rate: float = Field(
+        default=0.05,
+        ge=MIN_RISK_FREE_RATE,
+        le=MAX_RISK_FREE_RATE,
+        description=f"Risk-free rate ({MIN_RISK_FREE_RATE}-{MAX_RISK_FREE_RATE})"
+    )
+    volatility: float = Field(
+        default=0.2,
+        ge=MIN_VOLATILITY,
+        le=MAX_VOLATILITY,
+        description=f"Implied volatility ({MIN_VOLATILITY}-{MAX_VOLATILITY})"
+    )
+
+    @field_validator('stock_price')
+    @classmethod
+    def validate_stock_price_field(cls, v: float) -> float:
+        return validate_price(v, "stock_price")
+
+    @field_validator('strike_price')
+    @classmethod
+    def validate_strike_price_field(cls, v: float) -> float:
+        return validate_strike_price(v)
+
+    @field_validator('time_to_maturity')
+    @classmethod
+    def validate_time_to_maturity_field(cls, v: float) -> float:
+        return validate_time_to_maturity(v)
+
+    @field_validator('option_type')
+    @classmethod
+    def validate_option_type_field(cls, v: str) -> str:
+        return validate_option_type(v)
+
+    @field_validator('risk_free_rate')
+    @classmethod
+    def validate_risk_free_rate_field(cls, v: float) -> float:
+        return validate_risk_free_rate(v)
+
+    @field_validator('volatility')
+    @classmethod
+    def validate_volatility_field(cls, v: float) -> float:
+        return validate_volatility(v)
 
 
 class OptionPriceResponse(BaseModel):
@@ -52,10 +155,53 @@ class OptionPriceResponse(BaseModel):
 
 
 class PortfolioOptimizationRequest(BaseModel):
-    """Request for portfolio optimization"""
-    symbols: List[str]
-    target_return: float = 0.10  # 10% annual return
-    lookback_days: int = 252  # 1 year
+    """
+    Request for portfolio optimization.
+
+    Security:
+    - Symbols validated and capped at MAX_SYMBOLS_PER_REQUEST
+    - Target return bounded to reasonable range
+    - Lookback days bounded to prevent resource exhaustion
+    """
+    symbols: List[str] = Field(
+        ...,
+        min_length=2,
+        max_length=MAX_SYMBOLS_PER_REQUEST,
+        description=f"List of symbols (2-{MAX_SYMBOLS_PER_REQUEST}, minimum 2 for portfolio)"
+    )
+    target_return: float = Field(
+        default=0.10,
+        ge=-1.0,
+        le=10.0,
+        description="Target annual return (-100% to 1000%)"
+    )
+    lookback_days: int = Field(
+        default=252,
+        ge=30,
+        le=MAX_LOOKBACK_DAYS,
+        description=f"Days of historical data (30-{MAX_LOOKBACK_DAYS})"
+    )
+
+    @field_validator('symbols')
+    @classmethod
+    def validate_symbols_field(cls, v: List[str]) -> List[str]:
+        validated = validate_symbols(v)
+        if len(validated) < 2:
+            raise ValueError("At least 2 symbols required for portfolio optimization")
+        return validated
+
+    @field_validator('target_return')
+    @classmethod
+    def validate_target_return_field(cls, v: float) -> float:
+        return validate_target_return(v)
+
+    @field_validator('lookback_days')
+    @classmethod
+    def validate_lookback_days_field(cls, v: int) -> int:
+        # Portfolio needs at least 30 days for meaningful covariance
+        if v < 30:
+            raise ValueError("Portfolio optimization requires at least 30 days of data")
+        return validate_lookback_days(v)
 
 
 class PortfolioOptimizationResponse(BaseModel):
@@ -70,12 +216,67 @@ class PortfolioOptimizationResponse(BaseModel):
 
 
 class TrainPINNRequest(BaseModel):
-    """Request for training PINN model"""
-    model_type: str  # 'options' or 'portfolio'
-    option_type: Optional[str] = 'call'
-    risk_free_rate: float = 0.05
-    volatility: float = 0.2
-    epochs: int = 1000
+    """
+    Request for training PINN model.
+
+    Security:
+    - Model type validated against allowed values
+    - Epochs bounded to prevent resource exhaustion
+    - Numerical parameters bounded for stability
+    """
+    model_type: str = Field(
+        ...,
+        description="Model type: 'options' or 'portfolio'"
+    )
+    option_type: Optional[str] = Field(
+        default='call',
+        description="Option type for options model: 'call' or 'put'"
+    )
+    risk_free_rate: float = Field(
+        default=0.05,
+        ge=MIN_RISK_FREE_RATE,
+        le=MAX_RISK_FREE_RATE,
+        description=f"Risk-free rate ({MIN_RISK_FREE_RATE}-{MAX_RISK_FREE_RATE})"
+    )
+    volatility: float = Field(
+        default=0.2,
+        ge=MIN_VOLATILITY,
+        le=MAX_VOLATILITY,
+        description=f"Implied volatility ({MIN_VOLATILITY}-{MAX_VOLATILITY})"
+    )
+    epochs: int = Field(
+        default=1000,
+        ge=MIN_EPOCHS,
+        le=MAX_EPOCHS,
+        description=f"Training epochs ({MIN_EPOCHS}-{MAX_EPOCHS})"
+    )
+
+    @field_validator('model_type')
+    @classmethod
+    def validate_model_type_field(cls, v: str) -> str:
+        return validate_model_type(v, VALID_PINN_MODEL_TYPES, "model_type")
+
+    @field_validator('option_type')
+    @classmethod
+    def validate_option_type_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return 'call'
+        return validate_option_type(v)
+
+    @field_validator('risk_free_rate')
+    @classmethod
+    def validate_risk_free_rate_field(cls, v: float) -> float:
+        return validate_risk_free_rate(v)
+
+    @field_validator('volatility')
+    @classmethod
+    def validate_volatility_field(cls, v: float) -> float:
+        return validate_volatility(v)
+
+    @field_validator('epochs')
+    @classmethod
+    def validate_epochs_field(cls, v: int) -> int:
+        return validate_epochs(v)
 
 
 async def initialize_pinn_service():
@@ -192,8 +393,15 @@ async def optimize_portfolio(request: PortfolioOptimizationRequest):
     - No short-selling: w_i ≥ 0
     - Target return
     """
+    global portfolio_model
+
+    # Lazily initialize portfolio model if needed
     if portfolio_model is None:
-        raise HTTPException(status_code=503, detail="Portfolio model not initialized")
+        try:
+            portfolio_model = PortfolioPINN(num_assets=len(request.symbols))
+            logger.info(f"Portfolio PINN initialized on-demand for {len(request.symbols)} assets")
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Portfolio PINN initialization failed: {e}")
 
     try:
         # Get historical data for symbols

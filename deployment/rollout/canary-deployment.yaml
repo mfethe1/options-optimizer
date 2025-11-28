@@ -1,0 +1,137 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: options-api-pinn-fixes
+  namespace: options-production
+  labels:
+    app: options-api
+    deployment: pinn-fixes
+spec:
+  replicas: 6
+  strategy:
+    canary:
+      # Canary deployment strategy for PINN fixes
+      maxSurge: "25%"
+      maxUnavailable: 0
+      
+      # Traffic splitting steps
+      steps:
+      - setWeight: 10  # 10% traffic to canary
+      - pause:
+          duration: 5m  # Monitor for 5 minutes
+      - analysis:
+          templates:
+          - templateName: pinn-latency-analysis
+          args:
+          - name: service-name
+            value: options-api-canary
+      - setWeight: 25  # 25% traffic to canary
+      - pause:
+          duration: 10m  # Monitor for 10 minutes
+      - analysis:
+          templates:
+          - templateName: pinn-error-rate-analysis
+          args:
+          - name: service-name
+            value: options-api-canary
+      - setWeight: 50  # 50% traffic to canary
+      - pause:
+          duration: 15m  # Monitor for 15 minutes
+      - analysis:
+          templates:
+          - templateName: pinn-comprehensive-analysis
+          args:
+          - name: service-name
+            value: options-api-canary
+      - setWeight: 75  # 75% traffic to canary
+      - pause:
+          duration: 10m  # Final monitoring
+      - setWeight: 100  # Full rollout
+      
+      # Canary service configuration
+      canaryService: options-api-canary
+      stableService: options-api-stable
+      
+      # Traffic routing
+      trafficRouting:
+        nginx:
+          stableIngress: options-api-stable
+          annotationPrefix: nginx.ingress.kubernetes.io
+          additionalIngressAnnotations:
+            canary-by-header: "X-Canary"
+            canary-by-header-value: "pinn-fixes"
+      
+      # Analysis configuration
+      analysis:
+        templates:
+        - templateName: pinn-success-rate
+        args:
+        - name: service-name
+          value: options-api-canary
+        - name: prometheus-server
+          value: http://prometheus:9090
+        
+        # Automatic rollback triggers
+        successCondition: result[0] >= 0.95  # 95% success rate minimum
+        failureLimit: 3
+        inconclusiveLimit: 2
+        interval: 30s
+        count: 10
+        
+        # Rollback on failure
+        failurePolicy: abort
+        
+  selector:
+    matchLabels:
+      app: options-api
+  template:
+    metadata:
+      labels:
+        app: options-api
+        version: pinn-fixes
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: options-api
+        image: options-optimizer:pinn-fixes-v1.0.0
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: PINN_LATENCY_TARGET_MS
+          value: "260"
+        - name: ENABLE_PINN_METRICS
+          value: "true"
+        - name: ROLLOUT_VERSION
+          value: "pinn-fixes"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/pinn/quick
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /health/deployment/readiness
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 12

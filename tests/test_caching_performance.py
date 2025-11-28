@@ -108,28 +108,36 @@ class TestCachingPerformance:
     def test_fresh_param_bypasses_cache(self):
         """Test that fresh=true bypasses cache and schedules refresh"""
         client = TestClient(app)
-        
-        # First request (populate cache)
-        response1 = client.get("/api/investor-report?user_id=test_user&symbols=AAPL")
-        assert response1.status_code in [200, 202]
-        
-        # Second request with fresh=true (should bypass cache)
+
+        # First request (populate cache) - retry until cache is populated (200 response)
+        # Fix: Ensure cache is populated before testing fresh=true
+        max_retries = 3
+        for attempt in range(max_retries):
+            response1 = client.get("/api/investor-report?user_id=test_user&symbols=AAPL")
+            if response1.status_code == 200:
+                break  # Cache populated
+            assert attempt < max_retries - 1, "Failed to populate cache after retries"
+            time.sleep(0.5)  # Wait briefly before retry
+
+        assert response1.status_code == 200, "Cache must be populated (200) before testing fresh=true"
+
+        # Second request with fresh=true (should return cached data quickly)
         t0 = time.perf_counter()
         response2 = client.get("/api/investor-report?user_id=test_user&symbols=AAPL&fresh=true")
         latency_ms = (time.perf_counter() - t0) * 1000
-        
+
         assert response2.status_code == 200
-        
+
         data = response2.json()
         metadata = data.get('metadata', {})
-        
+
         # Should return cached data but schedule refresh
         assert metadata.get('cached') is True
         assert metadata.get('refreshing') is True
-        
+
         # Should still be fast (returns cached while scheduling refresh)
         assert latency_ms < 500, f"fresh=true latency {latency_ms:.2f}ms exceeds 500ms"
-        
+
         print(f"\nFresh Request Performance:")
         print(f"  Latency: {latency_ms:.2f}ms")
         print(f"  Cached: {metadata.get('cached')}")

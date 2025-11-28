@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -22,30 +22,18 @@ import {
   ZoomIn,
   ZoomOut,
   Refresh,
-  Timeline,
-  Layers,
-  CompareArrows,
-  Download,
-  Settings,
-  PlayArrow,
-  Pause,
-  ChevronLeft,
-  ChevronRight
+  Download
 } from '@mui/icons-material';
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip as ChartTooltip,
   Legend,
-  ReferenceLine,
-  ReferenceArea,
   ResponsiveContainer,
   ComposedChart,
-  Area,
-  Bar
+  Area
 } from 'recharts';
 
 interface ModelPrediction {
@@ -74,6 +62,7 @@ const UnifiedAnalysis: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Model data state
   const [models, setModels] = useState<ModelData[]>([
@@ -134,36 +123,52 @@ const UnifiedAnalysis: React.FC = () => {
   ]);
 
   const [chartData, setChartData] = useState<any[]>([]);
-  const [actualPrice, setActualPrice] = useState<any[]>([]);
 
   // WebSocket for real-time updates
   useEffect(() => {
-    if (isStreaming) {
-      // Import API config at runtime to avoid circular dependencies
-      import('../config/api.config').then(({ buildWsUrl }) => {
-        const wsUrl = buildWsUrl('unified/ws/unified-predictions/' + symbol);
-        const ws = new WebSocket(wsUrl);
+    if (!isStreaming) return;
 
-        ws.onopen = () => {
-          console.log('[UnifiedAnalysis] WebSocket connected:', wsUrl);
-        };
+    let ws: WebSocket | null = null;
+    let mounted = true;
 
-        ws.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          updateModelPredictions(data);
-        };
+    // Import API config at runtime to avoid circular dependencies
+    import('../config/api.config').then(({ buildWsUrl }) => {
+      if (!mounted) return;
 
-        ws.onerror = (error) => {
-          console.error('[UnifiedAnalysis] WebSocket error:', error);
-        };
+      const wsUrl = buildWsUrl('unified/ws/unified-predictions/' + symbol);
+      ws = new WebSocket(wsUrl);
 
-        ws.onclose = () => {
-          console.log('[UnifiedAnalysis] WebSocket closed');
-        };
+      ws.onopen = () => {
+        console.log('[UnifiedAnalysis] WebSocket connected:', wsUrl);
+      };
 
-        return () => ws.close();
-      });
-    }
+      ws.onmessage = (event) => {
+        if (!mounted) return;
+        const data = JSON.parse(event.data);
+        updateModelPredictions(data);
+      };
+
+      ws.onerror = (error) => {
+        console.error('[UnifiedAnalysis] WebSocket error:', error);
+        if (mounted) setIsStreaming(false);
+      };
+
+      ws.onclose = () => {
+        console.log('[UnifiedAnalysis] WebSocket closed');
+        if (mounted) setIsStreaming(false);
+      };
+    }).catch(error => {
+      console.error('[UnifiedAnalysis] Failed to initialize WebSocket:', error);
+      if (mounted) setIsStreaming(false);
+    });
+
+    // Cleanup function properly returned from useEffect
+    return () => {
+      mounted = false;
+      if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
   }, [isStreaming, symbol]);
 
   const updateModelPredictions = (data: any) => {
@@ -184,6 +189,7 @@ const UnifiedAnalysis: React.FC = () => {
 
   const loadAllPredictions = async () => {
     setLoading(true);
+    setError(null); // Clear previous errors
     try {
       /**
        * Fetches live market data from yfinance API via backend
@@ -204,7 +210,10 @@ const UnifiedAnalysis: React.FC = () => {
       const resp = await fetch(url, {
         method: 'POST'
       });
-      if (!resp.ok) throw new Error(`Unified forecast failed: ${resp.status}`);
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to load predictions (${resp.status}): ${errorText}`);
+      }
       const payload = await resp.json();
       const count = Array.isArray(payload?.timeline) ? payload.timeline.length : 0;
       const sampleFirst = count ? payload.timeline[0] : null;
@@ -231,51 +240,14 @@ const UnifiedAnalysis: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading unified predictions:', error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Failed to load predictions. Please try again.';
+      setError(errorMessage);
       setChartData([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const processAndAlignData = (data: any[]) => {
-    // Create unified timeline
-    const now = new Date();
-    const timeline = [];
-    
-    // Generate timeline points based on range
-    const points = timeRange === '1D' ? 24 : 
-                  timeRange === '5D' ? 120 : 
-                  timeRange === '1M' ? 30 : 
-                  timeRange === '3M' ? 90 : 365;
-    
-    for (let i = 0; i < points; i++) {
-      const timestamp = new Date(now.getTime() + i * 24 * 60 * 60 * 1000 / (timeRange === '1D' ? 24 : 1));
-      const dataPoint: any = {
-        timestamp: timestamp.toISOString(),
-        time: timestamp.toLocaleString(),
-      };
-
-      // Add each model's prediction
-      models.forEach((model, idx) => {
-        if (data[idx] && model.enabled) {
-          // Extract prediction value based on model type
-          if (model.type === 'range') {
-            dataPoint[`${model.id}_value`] = data[idx].prediction || Math.random() * 100 + 350;
-            dataPoint[`${model.id}_upper`] = data[idx].upper_bound || dataPoint[`${model.id}_value`] + 5;
-            dataPoint[`${model.id}_lower`] = data[idx].lower_bound || dataPoint[`${model.id}_value`] - 5;
-          } else {
-            dataPoint[`${model.id}_value`] = data[idx].prediction || Math.random() * 100 + 350;
-          }
-        }
-      });
-
-      // Add actual price (mock data for now)
-      dataPoint.actual = 350 + Math.sin(i / 10) * 20 + Math.random() * 5;
-      
-      timeline.push(dataPoint);
-    }
-
-    setChartData(timeline);
   };
 
   const toggleModel = (modelId: string) => {
@@ -418,6 +390,27 @@ const UnifiedAnalysis: React.FC = () => {
 
       {/* Main Chart Area */}
       <Paper sx={{ flex: 1, m: 2, mt: 0, p: 2, bgcolor: '#1A1F3A' }}>
+        {error && (
+          <Alert
+            severity="error"
+            onClose={() => setError(null)}
+            sx={{ mb: 2 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  setError(null);
+                  loadAllPredictions();
+                }}
+              >
+                RETRY
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
+        )}
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
@@ -505,7 +498,7 @@ const UnifiedAnalysis: React.FC = () => {
       <Paper sx={{ m: 2, mt: 0, bgcolor: '#1A1F3A' }}>
         <Tabs
           value={selectedTab}
-          onChange={(e, v) => setSelectedTab(v)}
+          onChange={(_e, v) => setSelectedTab(v)}
           sx={{
             borderBottom: 1,
             borderColor: 'divider',

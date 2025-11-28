@@ -27,6 +27,8 @@ from ..analytics.portfolio_metrics import PortfolioAnalytics
 from ..agents.swarm.agents.distillation_agent import DistillationAgent
 from ..agents.swarm.shared_context import SharedContext
 from ..agents.swarm.agent_instrumentation import instrument_distillation_agent
+from ..data.position_manager import PositionManager
+from .ml_integration_helpers import fetch_historical_prices
 
 logger = logging.getLogger(__name__)
 
@@ -78,32 +80,98 @@ async def _compute_and_cache_report(user_id: str, symbol_list: List[str]) -> Dic
     """
     start_time = datetime.now(timezone.utc)
 
-    # Generate synthetic portfolio data (in production, fetch from DB)
+    # Fetch real portfolio positions
+    from ..data.position_manager import PositionManager
+    
+    position_manager = PositionManager()
+    all_positions = position_manager.get_all_stock_positions()
+    
+    # Filter by requested symbols if provided
+    if symbol_list:
+        target_positions = [p for p in all_positions if p.symbol in symbol_list]
+        # If symbols provided but not in portfolio, treat as watchlist/simulation
+        if not target_positions:
+            logger.info(f"Symbols {symbol_list} not in portfolio, treating as watchlist")
+            target_positions = [{'symbol': s, 'quantity': 1, 'entry_price': 0} for s in symbol_list]
+    else:
+        target_positions = all_positions
+        
+    # If no positions at all, default to SPY/QQQ for demo
+    if not target_positions:
+        logger.info("No positions found, using default watchlist")
+        target_positions = [
+            {'symbol': 'SPY', 'quantity': 1, 'entry_price': 0},
+            {'symbol': 'QQQ', 'quantity': 1, 'entry_price': 0}
+        ]
+        
     positions = []
-    for symbol in symbol_list:
-        # Generate 100 days of synthetic returns
-        returns = np.random.normal(0.001, 0.02, 100).tolist()
-        positions.append({
-            'symbol': symbol,
-            'returns': returns,
-            'weight': 1.0 / len(symbol_list)
-        })
+    total_value = 0
+    
+    # Fetch real returns for each position
+    from ..agents.swarm.mcp_tools import JarvisMCPTools
+    
+    for pos in target_positions:
+        symbol = pos.get('symbol') if isinstance(pos, dict) else pos.symbol
+        quantity = pos.get('quantity', 1) if isinstance(pos, dict) else pos.quantity
+        
+        # Get price history (real data)
+        history = JarvisMCPTools.get_price_history(symbol, days=252)
+        
+        if history.get('success') and history.get('returns'):
+            returns = history['returns']
+            current_price = history.get('current_price', 0)
+            market_value = current_price * quantity
+            total_value += market_value
+            
+            positions.append({
+                'symbol': symbol,
+                'returns': returns,
+                'weight': 0,  # Will calculate after total known
+                'market_value': market_value
+            })
+        else:
+            logger.warning(f"Failed to fetch data for {symbol}, skipping")
+            
+    # Normalize weights
+    if total_value > 0:
+        for p in positions:
+            p['weight'] = p['market_value'] / total_value
+    elif positions:
+        # Equal weight fallback
+        weight = 1.0 / len(positions)
+        for p in positions:
+            p['weight'] = weight
 
-    # Compute portfolio metrics using MCP tools
+    # Compute market benchmark returns (SPY) for portfolio metrics and Phase 4
     from ..agents.swarm.mcp_tools import JarvisMCPTools
 
+    market_history = JarvisMCPTools.get_price_history('SPY', days=252)
+    market_returns = market_history.get('returns') if market_history.get('success') else None
+
+    # Compute portfolio metrics using MCP tools with real benchmark when available
     metrics_result = JarvisMCPTools.compute_portfolio_metrics(
         positions=positions,
-        benchmark_returns=None
+        benchmark_returns=market_returns
     )
 
     if 'error' in metrics_result:
         raise ValueError(f"Metrics computation failed: {metrics_result['error']}")
 
     # Compute Phase 4 metrics
+    # Fetch options flow metrics
+    primary_symbol = positions[0]['symbol'] if positions else 'SPY'
+    flow_metrics = JarvisMCPTools.get_options_flow_metrics(primary_symbol)
+
+    pcr = flow_metrics.get('pcr') if flow_metrics.get('success') else None
+    iv_skew = flow_metrics.get('iv_skew') if flow_metrics.get('success') else None
+    volume_ratio = flow_metrics.get('volume_ratio') if flow_metrics.get('success') else None
+
     phase4_result = JarvisMCPTools.compute_phase4_metrics(
-        asset_returns=positions[0]['returns'],
-        market_returns=None
+        asset_returns=positions[0]['returns'] if positions else None,
+        market_returns=market_returns,
+        pcr=pcr,
+        iv_skew=iv_skew,
+        volume_ratio=volume_ratio
     )
 
     # Build position data for DistillationAgent
@@ -234,10 +302,14 @@ async def get_investor_report(
             # Check if we have any cached version
             if cache_key in L1_CACHE:
                 report = L1_CACHE[cache_key].copy()
+                # Fix: Mark as cached and fresh in metadata
+                report['metadata']['cached'] = True
+                report['metadata']['cache_layer'] = 'L1'
+                report['metadata']['fresh'] = True
                 report['metadata']['refreshing'] = True
                 if background_tasks:
                     background_tasks.add_task(_compute_and_cache_report, user_id, symbol_list)
-                logger.info(f"✓ Returning cached report for {user_id}, refresh scheduled")
+                logger.info(f"✓ Returning L1 cached report for {user_id} (fresh=true), refresh scheduled")
                 return report
 
             if redis:
@@ -245,10 +317,14 @@ async def get_investor_report(
                     cached_json = await redis.get(cache_key)
                     if cached_json:
                         report = json.loads(cached_json)
+                        # Fix: Mark as cached and fresh in metadata
+                        report['metadata']['cached'] = True
+                        report['metadata']['cache_layer'] = 'L2'
+                        report['metadata']['fresh'] = True
                         report['metadata']['refreshing'] = True
                         if background_tasks:
                             background_tasks.add_task(_compute_and_cache_report, user_id, symbol_list)
-                        logger.info(f"✓ Returning L2 cached report for {user_id}, refresh scheduled")
+                        logger.info(f"✓ Returning L2 cached report for {user_id} (fresh=true), refresh scheduled")
                         return report
                 except Exception as e:
                     logger.warning(f"⚠️ L2 cache lookup failed: {e}")

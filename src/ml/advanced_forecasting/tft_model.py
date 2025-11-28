@@ -218,6 +218,121 @@ class TemporalFusionTransformer:
 
         logger.info(f"Initialized TFT: features={num_features}, horizons={horizons}, quantiles={quantiles}")
 
+    def prepare_multi_horizon_targets(self, prices: np.ndarray) -> np.ndarray:
+        """
+        Prepare targets for multi-horizon forecasting.
+
+        For each time t, compute future returns at each horizon:
+        - y_h[t] = (price[t+h] - price[t]) / price[t]
+
+        Args:
+            prices: 1D array of prices, shape [n_timesteps]
+
+        Returns:
+            targets: 2D array of shape [n_samples, num_horizons]
+                     where n_samples = len(prices) - max(horizons)
+        """
+        prices = np.asarray(prices).flatten()
+        max_horizon = max(self.horizons)
+        n_samples = len(prices) - max_horizon
+
+        if n_samples <= 0:
+            raise ValueError(
+                f"Not enough price data for horizons {self.horizons}. "
+                f"Need at least {max_horizon + 1} prices, got {len(prices)}"
+            )
+
+        targets = np.zeros((n_samples, len(self.horizons)), dtype=np.float32)
+
+        for i, h in enumerate(self.horizons):
+            # Future return at horizon h: (price[t+h] - price[t]) / price[t]
+            # For sample t, target is return from t to t+h
+            current_prices = prices[:n_samples]
+            future_prices = prices[h:h + n_samples]
+
+            # Avoid division by zero
+            safe_current = np.where(current_prices == 0, 1e-8, current_prices)
+            targets[:, i] = (future_prices - current_prices) / safe_current
+
+        logger.info(
+            f"Prepared multi-horizon targets: {n_samples} samples, "
+            f"horizons={self.horizons}, target shape={targets.shape}"
+        )
+
+        return targets
+
+    def prepare_training_data(
+        self,
+        features: np.ndarray,
+        prices: np.ndarray,
+        lookback_steps: int = 60
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Prepare aligned training data with proper multi-horizon targets.
+
+        This method ensures features (X) and targets (y) are properly aligned:
+        - X[i] contains features from time [i, i+lookback_steps)
+        - y[i] contains returns from time i+lookback_steps to future horizons
+
+        Args:
+            features: 2D array of features, shape [n_timesteps, n_features]
+            prices: 1D array of prices, shape [n_timesteps]
+            lookback_steps: Number of historical steps for input window
+
+        Returns:
+            X_train: shape [n_samples, lookback_steps, n_features]
+            y_train: shape [n_samples, num_horizons]
+        """
+        features = np.asarray(features)
+        prices = np.asarray(prices).flatten()
+
+        if len(features) != len(prices):
+            raise ValueError(
+                f"Features and prices must have same length. "
+                f"Got features={len(features)}, prices={len(prices)}"
+            )
+
+        max_horizon = max(self.horizons)
+        n_total = len(prices)
+
+        # Number of valid samples we can create
+        # We need lookback_steps for input + max_horizon for targets
+        n_samples = n_total - lookback_steps - max_horizon
+
+        if n_samples <= 0:
+            raise ValueError(
+                f"Not enough data. Need at least {lookback_steps + max_horizon + 1} "
+                f"timesteps, got {n_total}"
+            )
+
+        # Create input sequences (X)
+        X = np.zeros((n_samples, lookback_steps, features.shape[1]), dtype=np.float32)
+        for i in range(n_samples):
+            X[i] = features[i:i + lookback_steps]
+
+        # Create targets (y) - returns from end of lookback window to each horizon
+        y = np.zeros((n_samples, len(self.horizons)), dtype=np.float32)
+        for i in range(n_samples):
+            # Reference price is at the end of the lookback window
+            ref_idx = i + lookback_steps - 1
+            ref_price = prices[ref_idx]
+
+            # Avoid division by zero
+            if ref_price == 0:
+                ref_price = 1e-8
+
+            for j, h in enumerate(self.horizons):
+                future_idx = ref_idx + h
+                future_price = prices[future_idx]
+                y[i, j] = (future_price - ref_price) / ref_price
+
+        logger.info(
+            f"Prepared training data: X={X.shape}, y={y.shape}, "
+            f"horizons={self.horizons}"
+        )
+
+        return X, y
+
     def build_model(self, lookback_steps: int = 60):
         """
         Build TFT architecture
@@ -316,25 +431,56 @@ class TemporalFusionTransformer:
              epochs: int = 100,
              batch_size: int = 32):
         """
-        Train TFT model
+        Train TFT model with multi-horizon targets.
+
+        IMPORTANT: y_train must have shape [samples, num_horizons] where each column
+        contains the target return for a different forecast horizon. Use
+        prepare_training_data() or prepare_multi_horizon_targets() to create
+        properly structured targets.
 
         Args:
-            X_train: [samples, lookback_steps, features]
-            y_train: [samples, num_horizons] - targets for all horizons
-            X_val: Validation data (optional)
-            y_val: Validation targets
+            X_train: [samples, lookback_steps, features] - input sequences
+            y_train: [samples, num_horizons] - DIFFERENT targets for each horizon
+                     Column 0: 1-day return, Column 1: 5-day return, etc.
+            X_val: Validation input data (optional)
+            y_val: Validation targets with same structure as y_train
             epochs: Training epochs
             batch_size: Batch size
+
+        Raises:
+            ValueError: If y_train doesn't have the expected shape
         """
         if self.model is None:
             # Align num_features with training data
             self.num_features = X_train.shape[2]
             self.build_model(lookback_steps=X_train.shape[1])
 
-        # Prepare multi-output targets (same targets for all quantiles)
-        output_names = self.model.output_names
-        y_train_multi = {name: y_train for name in output_names}
-        y_val_multi = ({name: y_val for name in output_names} if y_val is not None else None)
+        # Validate y_train shape - CRITICAL for multi-horizon learning
+        expected_horizons = len(self.horizons)
+        if y_train.ndim != 2:
+            raise ValueError(
+                f"y_train must be 2D with shape [samples, num_horizons]. "
+                f"Got shape {y_train.shape}. Use prepare_training_data() to create "
+                f"properly structured multi-horizon targets."
+            )
+        if y_train.shape[1] != expected_horizons:
+            raise ValueError(
+                f"y_train must have {expected_horizons} columns (one per horizon: {self.horizons}). "
+                f"Got {y_train.shape[1]} columns. Each horizon needs its own target values."
+            )
+
+        # Validate y_val shape if provided
+        if y_val is not None:
+            if y_val.ndim != 2 or y_val.shape[1] != expected_horizons:
+                raise ValueError(
+                    f"y_val must have shape [samples, {expected_horizons}]. Got {y_val.shape}"
+                )
+
+        # Log target statistics to help detect issues
+        logger.info(
+            f"Training targets - shape: {y_train.shape}, "
+            f"horizon means: {[f'{self.horizons[i]}d={y_train[:, i].mean():.4f}' for i in range(expected_horizons)]}"
+        )
 
         # Callbacks
         callbacks = [
@@ -355,20 +501,21 @@ class TemporalFusionTransformer:
             )
         )
 
-        # Train
-        validation_data = None
-        if X_val is not None and y_val is not None:
-            validation_data = (X_val, y_val_multi)
-
-        # Build datasets explicitly to avoid data adaptation issues with multi-output models
+        # Build datasets with proper multi-horizon targets
+        # Each quantile output (q10, q50, q90) receives the SAME multi-horizon targets
+        # because quantiles estimate different percentiles of the SAME distribution
         import tensorflow as tf  # safe: guarded by TENSORFLOW_AVAILABLE in __init__
-        y_list = [y_train] * len(self.model.output_names)
+
+        # y_train shape: [samples, num_horizons]
+        # Each output head predicts all horizons, so we pass the same y_train to each
+        num_outputs = len(self.model.output_names)
+        y_list = [y_train] * num_outputs
         ds_train = tf.data.Dataset.from_tensor_slices((X_train, tuple(y_list)))
         ds_train = ds_train.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
         ds_val = None
         if X_val is not None and y_val is not None:
-            y_val_list = [y_val] * len(self.model.output_names)
+            y_val_list = [y_val] * num_outputs
             ds_val = tf.data.Dataset.from_tensor_slices((X_val, tuple(y_val_list)))
             ds_val = ds_val.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 

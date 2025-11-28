@@ -29,12 +29,22 @@ import SmartRoutingPage from './pages/SmartRoutingPage';
 import MLPredictionsPage from './pages/MLPredictionsPage';
 import StressTestingPage from './pages/StressTestingPage';
 import BrokerManagementPage from './pages/BrokerManagementPage';
-// Individual ML model pages consolidated into UnifiedAnalysis
+// Individual ML model pages - accessible for detailed model-specific analysis
+import GNNPage from './pages/AdvancedForecasting/GNNPage';
+import PINNPage from './pages/AdvancedForecasting/PINNPage';
+import MambaPage from './pages/AdvancedForecasting/MambaPage';
+import EpidemicVolatilityPage from './pages/BioFinancial/EpidemicVolatilityPage';
 import ChartsDemo from './pages/ChartsDemo';
 import UnifiedAnalysis from './pages/UnifiedAnalysis';
 import UnifiedAnalysisEnhanced from './pages/UnifiedAnalysisEnhanced';
+import TruthDashboard from './pages/TruthDashboard';
 import CommandPalette from './components/CommandPalette';
 import NavigationSidebar from './components/NavigationSidebar';
+import {
+  ErrorBoundary,
+  RouteErrorBoundary,
+  WebSocketErrorBoundary,
+} from './components/ErrorBoundary';
 
 function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -154,73 +164,238 @@ function AppContent() {
   }, [commandPaletteOpen, navigate]);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Command Palette */}
-      <CommandPalette
-        isOpen={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-      />
+    <ErrorBoundary boundaryName="Application Root" showRetry={true}>
+      <div className="flex h-screen bg-gray-50">
+        {/* Command Palette */}
+        <CommandPalette
+          isOpen={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+        />
 
-      {/* Sidebar Navigation */}
-      <NavigationSidebar />
+        {/* Sidebar Navigation */}
+        <ErrorBoundary boundaryName="Navigation Sidebar" compact>
+          <NavigationSidebar />
+        </ErrorBoundary>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
-          <Routes>
-            <Route path="/" element={<UnifiedAnalysisEnhanced />} />
-            <Route path="/unified" element={<UnifiedAnalysis />} />
-            <Route path="/positions" element={<PositionsPage />} />
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+            <Routes>
+              {/* Home / Unified Analysis - WebSocket dependent */}
+              <Route path="/" element={
+                <RouteErrorBoundary routeName="Unified Analysis">
+                  <WebSocketErrorBoundary componentName="ML Forecasting Dashboard">
+                    <UnifiedAnalysisEnhanced />
+                  </WebSocketErrorBoundary>
+                </RouteErrorBoundary>
+              } />
+              <Route path="/unified" element={
+                <RouteErrorBoundary routeName="Unified Analysis">
+                  <WebSocketErrorBoundary componentName="ML Forecasting Dashboard">
+                    <UnifiedAnalysis />
+                  </WebSocketErrorBoundary>
+                </RouteErrorBoundary>
+              } />
+              <Route path="/positions" element={
+                <RouteErrorBoundary routeName="Positions">
+                  <PositionsPage />
+                </RouteErrorBoundary>
+              } />
 
-            {/* New Feature Routes */}
-            <Route path="/custom-dashboard" element={<CustomDashboardPage />} />
-            <Route path="/options-chain" element={<OptionsChainPage />} />
-            <Route path="/options-analytics" element={<OptionsAnalyticsPage />} />
-            <Route path="/risk-dashboard" element={<RiskDashboardPage />} />
-            <Route path="/calendar" element={<EconomicCalendarPage />} />
-            <Route path="/backtest" element={<BacktestPage />} />
-            <Route path="/execution" element={<ExecutionQualityPage />} />
-            <Route path="/schwab-connection" element={<SchwabConnectionPage />} />
-            <Route path="/schwab-trading" element={<SchwabTradingPage />} />
-            <Route path="/multi-monitor" element={<MultiMonitorPage />} />
-            <Route path="/ai-recommendations" element={<AIRecommendationsPage />} />
-            <Route path="/market-data" element={<RealTimeQuotePage />} />
-            <Route path="/smart-routing" element={<SmartRoutingPage />} />
-            <Route path="/ml-predictions" element={<MLPredictionsPage />} />
-            <Route path="/stress-testing" element={<StressTestingPage />} />
-            <Route path="/broker-management" element={<BrokerManagementPage />} />
-            {/* All ML models now integrated into Unified Analysis page */}
-            <Route path="/charts-demo" element={<ChartsDemo />} />
-            <Route path="/news" element={<NewsFeedPage />} />
-            <Route path="/conversational" element={<ConversationalTradingPage />} />
-            <Route path="/chart-analysis" element={<ChartAnalysisPage />} />
-            <Route path="/anomalies" element={<AnomalyDetectionPage />} />
-            <Route path="/sentiment" element={<SentimentAnalysisPage />} />
-            <Route path="/paper-trading" element={<PaperTradingPage />} />
+              {/* New Feature Routes */}
+              <Route path="/custom-dashboard" element={
+                <RouteErrorBoundary routeName="Custom Dashboard">
+                  <CustomDashboardPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/options-chain" element={
+                <RouteErrorBoundary routeName="Options Chain">
+                  <OptionsChainPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/options-analytics" element={
+                <RouteErrorBoundary routeName="Options Analytics">
+                  <OptionsAnalyticsPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/risk-dashboard" element={
+                <RouteErrorBoundary routeName="Risk Dashboard">
+                  <RiskDashboardPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/calendar" element={
+                <RouteErrorBoundary routeName="Economic Calendar">
+                  <EconomicCalendarPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/backtest" element={
+                <RouteErrorBoundary routeName="Backtest">
+                  <BacktestPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/execution" element={
+                <RouteErrorBoundary routeName="Execution Quality">
+                  <ExecutionQualityPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/schwab-connection" element={
+                <RouteErrorBoundary routeName="Schwab Connection">
+                  <SchwabConnectionPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/schwab-trading" element={
+                <RouteErrorBoundary routeName="Schwab Trading">
+                  <SchwabTradingPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/multi-monitor" element={
+                <RouteErrorBoundary routeName="Multi-Monitor">
+                  <MultiMonitorPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/ai-recommendations" element={
+                <RouteErrorBoundary routeName="AI Recommendations">
+                  <AIRecommendationsPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/market-data" element={
+                <RouteErrorBoundary routeName="Market Data">
+                  <WebSocketErrorBoundary componentName="Real-Time Quotes">
+                    <RealTimeQuotePage />
+                  </WebSocketErrorBoundary>
+                </RouteErrorBoundary>
+              } />
+              <Route path="/smart-routing" element={
+                <RouteErrorBoundary routeName="Smart Routing">
+                  <SmartRoutingPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/ml-predictions" element={
+                <RouteErrorBoundary routeName="ML Predictions">
+                  <MLPredictionsPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/stress-testing" element={
+                <RouteErrorBoundary routeName="Stress Testing">
+                  <StressTestingPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/broker-management" element={
+                <RouteErrorBoundary routeName="Broker Management">
+                  <BrokerManagementPage />
+                </RouteErrorBoundary>
+              } />
 
-            {/* Original Routes */}
-            <Route path="/swarm-analysis" element={<SwarmAnalysisPage />} />
-            <Route path="/phase4-demo" element={<Phase4DemoPage />} />
-            <Route path="/risk-panel-demo" element={<RiskPanelDemoPage />} />
-            <Route path="/agent-transparency" element={<AgentTransparencyDemoPage />} />
-          </Routes>
-        </main>
+              {/* Truth Dashboard - Model Accuracy Tracking */}
+              <Route path="/truth" element={
+                <RouteErrorBoundary routeName="Truth Dashboard">
+                  <TruthDashboard />
+                </RouteErrorBoundary>
+              } />
+
+              {/* Individual ML Model Pages for detailed analysis */}
+              <Route path="/ml/gnn" element={
+                <RouteErrorBoundary routeName="GNN Model">
+                  <GNNPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/ml/pinn" element={
+                <RouteErrorBoundary routeName="PINN Model">
+                  <PINNPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/ml/mamba" element={
+                <RouteErrorBoundary routeName="Mamba Model">
+                  <MambaPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/ml/epidemic" element={
+                <RouteErrorBoundary routeName="Epidemic Volatility">
+                  <EpidemicVolatilityPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/charts-demo" element={
+                <RouteErrorBoundary routeName="Charts Demo">
+                  <ChartsDemo />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/news" element={
+                <RouteErrorBoundary routeName="News Feed">
+                  <NewsFeedPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/conversational" element={
+                <RouteErrorBoundary routeName="Conversational Trading">
+                  <ConversationalTradingPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/chart-analysis" element={
+                <RouteErrorBoundary routeName="Chart Analysis">
+                  <ChartAnalysisPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/anomalies" element={
+                <RouteErrorBoundary routeName="Anomaly Detection">
+                  <AnomalyDetectionPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/sentiment" element={
+                <RouteErrorBoundary routeName="Sentiment Analysis">
+                  <SentimentAnalysisPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/paper-trading" element={
+                <RouteErrorBoundary routeName="Paper Trading">
+                  <PaperTradingPage />
+                </RouteErrorBoundary>
+              } />
+
+              {/* Original Routes - WebSocket dependent */}
+              <Route path="/swarm-analysis" element={
+                <RouteErrorBoundary routeName="Swarm Analysis">
+                  <WebSocketErrorBoundary componentName="Agent Swarm">
+                    <SwarmAnalysisPage />
+                  </WebSocketErrorBoundary>
+                </RouteErrorBoundary>
+              } />
+              <Route path="/phase4-demo" element={
+                <RouteErrorBoundary routeName="Phase 4 Demo">
+                  <WebSocketErrorBoundary componentName="Phase 4 Metrics">
+                    <Phase4DemoPage />
+                  </WebSocketErrorBoundary>
+                </RouteErrorBoundary>
+              } />
+              <Route path="/risk-panel-demo" element={
+                <RouteErrorBoundary routeName="Risk Panel Demo">
+                  <RiskPanelDemoPage />
+                </RouteErrorBoundary>
+              } />
+              <Route path="/agent-transparency" element={
+                <RouteErrorBoundary routeName="Agent Transparency">
+                  <WebSocketErrorBoundary componentName="Agent Events">
+                    <AgentTransparencyDemoPage />
+                  </WebSocketErrorBoundary>
+                </RouteErrorBoundary>
+              } />
+            </Routes>
+          </main>
+        </div>
+
+        {/* Toast Notifications */}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+          }}
+        />
       </div>
-
-      {/* Toast Notifications */}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#363636',
-            color: '#fff',
-          },
-        }}
-      />
-    </div>
+    </ErrorBoundary>
   );
 }
 

@@ -1,0 +1,134 @@
+# Artillery.io Load Testing Configuration for PINN Model
+# Tests realistic trading patterns and latency improvements
+
+config:
+  target: 'http://localhost:8001'
+  phases:
+    # Warm-up phase
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm-up"
+    
+    # Normal trading hours simulation
+    - duration: 300  # 5 minutes
+      arrivalRate: 20
+      name: "Normal trading"
+    
+    # Market open spike
+    - duration: 120  # 2 minutes
+      arrivalRate: 50
+      name: "Market open spike"
+    
+    # Sustained high activity
+    - duration: 600  # 10 minutes
+      arrivalRate: 30
+      name: "Sustained activity"
+    
+    # Market close spike
+    - duration: 120  # 2 minutes
+      arrivalRate: 45
+      name: "Market close spike"
+    
+    # Cool down
+    - duration: 60
+      arrivalRate: 5
+      name: "Cool down"
+
+  # Performance expectations
+  ensure:
+    p95: 260  # 95th percentile < 260ms
+    p99: 400  # 99th percentile < 400ms
+    maxErrorRate: 0.05  # < 5% error rate
+
+  # Load testing plugins
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+    
+  # Custom metrics
+  processor: "./pinn-processor.js"
+
+# Test scenarios
+scenarios:
+  # Scenario 1: Single stock analysis (60% of traffic)
+  - weight: 60
+    name: "Single stock analysis"
+    flow:
+      - get:
+          url: "/health/pinn/quick"
+          capture:
+            - json: "$.pinn_available"
+              as: "pinn_ready"
+      - think: 1
+      - get:
+          url: "/api/pinn/predict"
+          qs:
+            symbol: "{{ $randomPick(['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN']) }}"
+            current_price: "{{ $randomInt(100, 300) }}"
+          name: "PINN Single Prediction"
+          capture:
+            - json: "$.price"
+              as: "predicted_price"
+            - json: "$.confidence"
+              as: "confidence"
+            - json: "$.method"
+              as: "method"
+      - think: "{{ $randomInt(2, 8) }}"
+
+  # Scenario 2: Portfolio analysis (25% of traffic)
+  - weight: 25
+    name: "Portfolio analysis"
+    flow:
+      - loop:
+          - get:
+              url: "/api/pinn/predict"
+              qs:
+                symbol: "{{ $randomPick(['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META']) }}"
+                current_price: "{{ $randomInt(100, 400) }}"
+              name: "PINN Portfolio Prediction"
+          - think: 0.5
+        count: "{{ $randomInt(3, 6) }}"
+      - think: "{{ $randomInt(5, 15) }}"
+
+  # Scenario 3: Rapid trading analysis (15% of traffic)
+  - weight: 15
+    name: "Rapid trading"
+    flow:
+      - loop:
+          - get:
+              url: "/api/pinn/predict"
+              qs:
+                symbol: "{{ $randomPick(['AAPL', 'TSLA', 'NVDA']) }}"
+                current_price: "{{ $randomInt(150, 250) }}"
+              name: "PINN Rapid Prediction"
+          - think: 0.1
+        count: "{{ $randomInt(5, 10) }}"
+      - think: "{{ $randomInt(1, 3) }}"
+
+# Before/After hooks
+before:
+  flow:
+    - log: "Starting PINN load test"
+    - post:
+        url: "/health/pinn/warmup"
+        name: "Cache warmup"
+    - get:
+        url: "/health/pinn"
+        capture:
+          - json: "$.overall_status"
+            as: "initial_health"
+        expect:
+          - statusCode: 200
+          - hasProperty: "pinn_available"
+
+after:
+  flow:
+    - log: "PINN load test completed"
+    - get:
+        url: "/health/pinn/metrics"
+        name: "Final metrics"
+        capture:
+          - json: "$.cache.hit_rate"
+            as: "final_cache_hit_rate"
+          - json: "$.performance.target_latency_ms"
+            as: "target_latency"

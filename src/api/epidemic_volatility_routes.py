@@ -2,10 +2,15 @@
 API Routes for Epidemic Volatility Forecasting
 
 Bio-Financial Breakthrough Feature: Disease dynamics for market fear prediction
+
+Security:
+- Model type validated against allowed values (SIR, SEIR)
+- Training parameters bounded to prevent resource exhaustion
+- Horizon days bounded to reasonable forecast range
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
@@ -16,6 +21,21 @@ from ..ml.bio_financial.epidemic_volatility import (
 )
 from ..ml.bio_financial.epidemic_data_service import EpidemicDataService
 from ..ml.bio_financial.epidemic_training import EpidemicModelTrainer
+
+# Import validators for security-hardened input validation
+from .validators import (
+    validate_horizon_days,
+    validate_epochs,
+    validate_batch_size,
+    validate_physics_weight,
+    validate_model_type,
+    sanitize_log_input,
+    VALID_EPIDEMIC_MODEL_TYPES,
+    MIN_EPOCHS,
+    MAX_EPOCHS,
+    MIN_BATCH_SIZE,
+    MAX_BATCH_SIZE,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -28,9 +48,33 @@ trainer: Optional[EpidemicModelTrainer] = None
 
 # Request/Response Models
 class EpidemicForecastRequest(BaseModel):
-    """Request for epidemic volatility forecast"""
-    horizon_days: int = 30
-    model_type: str = "SEIR"  # "SIR" or "SEIR"
+    """
+    Request for epidemic volatility forecast.
+
+    Security:
+    - Model type validated against allowed values (SIR, SEIR)
+    - Horizon days bounded to reasonable forecast range
+    """
+    horizon_days: int = Field(
+        default=30,
+        ge=1,
+        le=365,
+        description="Forecast horizon in days (1-365)"
+    )
+    model_type: str = Field(
+        default="SEIR",
+        description="Epidemic model type: SIR or SEIR"
+    )
+
+    @field_validator('horizon_days')
+    @classmethod
+    def validate_horizon_days_field(cls, v: int) -> int:
+        return validate_horizon_days(v)
+
+    @field_validator('model_type')
+    @classmethod
+    def validate_model_type_field(cls, v: str) -> str:
+        return validate_model_type(v, VALID_EPIDEMIC_MODEL_TYPES, "model_type")
 
 
 class EpidemicForecastResponse(BaseModel):
@@ -47,11 +91,56 @@ class EpidemicForecastResponse(BaseModel):
 
 
 class TrainingRequest(BaseModel):
-    """Request to train epidemic model"""
-    model_type: str = "SEIR"
-    epochs: int = 100
-    batch_size: int = 32
-    physics_weight: float = 0.1
+    """
+    Request to train epidemic model.
+
+    Security:
+    - Model type validated against allowed values
+    - Training parameters bounded to prevent resource exhaustion
+    - Physics weight bounded for numerical stability
+    """
+    model_type: str = Field(
+        default="SEIR",
+        description="Epidemic model type: SIR or SEIR"
+    )
+    epochs: int = Field(
+        default=100,
+        ge=MIN_EPOCHS,
+        le=MAX_EPOCHS,
+        description=f"Training epochs ({MIN_EPOCHS}-{MAX_EPOCHS})"
+    )
+    batch_size: int = Field(
+        default=32,
+        ge=MIN_BATCH_SIZE,
+        le=MAX_BATCH_SIZE,
+        description=f"Batch size ({MIN_BATCH_SIZE}-{MAX_BATCH_SIZE})"
+    )
+    physics_weight: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1000.0,
+        description="Physics loss weight (0.0-1000.0)"
+    )
+
+    @field_validator('model_type')
+    @classmethod
+    def validate_model_type_field(cls, v: str) -> str:
+        return validate_model_type(v, VALID_EPIDEMIC_MODEL_TYPES, "model_type")
+
+    @field_validator('epochs')
+    @classmethod
+    def validate_epochs_field(cls, v: int) -> int:
+        return validate_epochs(v)
+
+    @field_validator('batch_size')
+    @classmethod
+    def validate_batch_size_field(cls, v: int) -> int:
+        return validate_batch_size(v)
+
+    @field_validator('physics_weight')
+    @classmethod
+    def validate_physics_weight_field(cls, v: float) -> float:
+        return validate_physics_weight(v)
 
 
 class HistoricalEpisodesResponse(BaseModel):
@@ -100,8 +189,22 @@ async def get_epidemic_forecast(request: EpidemicForecastRequest):
     - Trading signal (buy/sell/hold protection)
     - Confidence level
     """
-    if predictor is None or data_service is None:
-        raise HTTPException(status_code=503, detail="Epidemic service not initialized")
+    global predictor, data_service
+
+    # Lazily initialize services if needed
+    if predictor is None:
+        try:
+            predictor = EpidemicVolatilityPredictor(model_type=request.model_type)
+            logger.info(f"Epidemic predictor initialized on-demand with {request.model_type} model")
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Epidemic predictor initialization failed: {e}")
+
+    if data_service is None:
+        try:
+            data_service = EpidemicDataService()
+            logger.info("Epidemic data service initialized on-demand")
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Epidemic data service initialization failed: {e}")
 
     try:
         # Get current market features

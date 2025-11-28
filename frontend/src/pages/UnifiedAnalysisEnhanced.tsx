@@ -52,12 +52,15 @@ import {
   FullscreenExit,
   TrendingUp,
   BarChart,
+  Schedule,
 } from '@mui/icons-material';
 import TradingViewChart from '../components/charts/TradingViewChart';
 import { OHLCVData, IndicatorConfig, PredictionSeriesConfig, LineData } from '../components/charts/chartTypes';
 import { buildApiUrl } from '../config/api.config';
 import { toTime } from '../components/charts/chartUtils';
 import VIXAnalysisWidget from '../components/VIXAnalysisWidget';
+import { DataFreshnessIndicator } from '../components/DataFreshnessIndicator';
+import { ChartSkeleton, VIXWidgetSkeleton } from '../components/Skeletons';
 
 // Model configuration
 interface ModelConfig {
@@ -77,6 +80,7 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
   // State management
   const [symbol, setSymbol] = useState('SPY');
   const [timeRange, setTimeRange] = useState('1D');
+  const [predictionHorizon, setPredictionHorizon] = useState(30);
   const [chartType, setChartType] = useState<ChartType>('candlestick');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -85,6 +89,10 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
   // Chart data
   const [ohlcvData, setOhlcvData] = useState<OHLCVData[]>([]);
   const [crosshairData, setCrosshairData] = useState<any>(null);
+
+  // Data freshness tracking
+  const [marketDataLastUpdated, setMarketDataLastUpdated] = useState<Date | null>(null);
+  const [predictionsLastUpdated, setPredictionsLastUpdated] = useState<Date | null>(null);
 
   // Model configuration
   const [models, setModels] = useState<ModelConfig[]>([
@@ -151,7 +159,7 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
     setError(null);
 
     try {
-      const url = buildApiUrl(`unified/forecast/all?symbol=${encodeURIComponent(symbol)}&time_range=${encodeURIComponent(timeRange)}`);
+      const url = buildApiUrl(`unified/forecast/all?symbol=${encodeURIComponent(symbol)}&time_range=${encodeURIComponent(timeRange)}&prediction_horizon=${predictionHorizon}`);
       console.log('[UnifiedAnalysisEnhanced] Fetching:', url);
 
       const response = await fetch(url, { method: 'POST' });
@@ -187,6 +195,7 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
           }));
 
         setOhlcvData(ohlcv);
+        setMarketDataLastUpdated(new Date());
         console.log('[UnifiedAnalysisEnhanced] OHLCV data:', {
           points: ohlcv.length,
           sample: ohlcv[0],
@@ -196,6 +205,7 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
       // Store model predictions for overlays (now structured as arrays)
       if (data.predictions) {
         setModelPredictions(data.predictions);
+        setPredictionsLastUpdated(new Date());
         console.log('[UnifiedAnalysisEnhanced] Predictions structure:', {
           keys: Object.keys(data.predictions),
           sample: data.predictions.epidemic ? `epidemic: ${data.predictions.epidemic.length} points` : 'no epidemic',
@@ -217,7 +227,7 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [symbol, timeRange]);
+  }, [symbol, timeRange, predictionHorizon]);
 
   /**
    * Load data on mount and when symbol/timeRange changes
@@ -395,6 +405,26 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
             ))}
           </ButtonGroup>
 
+          {/* Prediction Horizon Selector */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1, px: 1, py: 0.5 }}>
+            <Typography variant="caption" sx={{ color: '#64B5F6' }}>Horizon:</Typography>
+            <TextField
+              value={predictionHorizon}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                if (!isNaN(val) && val > 0) setPredictionHorizon(val);
+              }}
+              type="number"
+              size="small"
+              variant="standard"
+              InputProps={{
+                disableUnderline: true,
+                sx: { color: 'white', width: 40, textAlign: 'center', fontSize: '0.875rem' }
+              }}
+            />
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>days</Typography>
+          </Box>
+
           {/* Chart Type Selector */}
           <ToggleButtonGroup
             value={chartType}
@@ -460,8 +490,35 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
           </Tooltip>
         </Stack>
 
-        {/* Model Toggle Chips */}
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
+        {/* Data Freshness and Model Toggle Chips */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mt: 2 }}>
+          {/* Freshness Indicators */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Schedule sx={{ fontSize: 16, color: 'rgba(255,255,255,0.5)' }} />
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mr: 1 }}>
+              Market:
+            </Typography>
+            <DataFreshnessIndicator
+              lastUpdated={marketDataLastUpdated}
+              staleThresholdSeconds={120}   // 2 minutes = stale for market data
+              oldThresholdSeconds={600}     // 10 minutes = old
+              showTimestamp={true}
+            />
+          </Box>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.2)' }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mr: 1 }}>
+              Predictions:
+            </Typography>
+            <DataFreshnessIndicator
+              lastUpdated={predictionsLastUpdated}
+              staleThresholdSeconds={120}   // 2 minutes = stale for predictions
+              oldThresholdSeconds={600}     // 10 minutes = old
+              showTimestamp={true}
+            />
+          </Box>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.2)' }} />
+          {/* Model Toggle Chips */}
           {models.map((model) => (
             <Chip
               key={model.id}
@@ -502,8 +559,11 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
       {/* Main Content: Chart + VIX Widget */}
       <Box sx={{ flex: 1, p: 2, overflow: 'hidden', display: 'flex', gap: 2 }}>
         {/* Chart Area */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          {ohlcvData.length > 0 ? (
+        <Box sx={{ flex: 1, minWidth: 0, height: '100%' }}>
+          {loading && ohlcvData.length === 0 ? (
+            // Show skeleton while initially loading
+            <ChartSkeleton height={500} />
+          ) : ohlcvData.length > 0 ? (
             <TradingViewChart
               config={{
                 symbol,
@@ -526,20 +586,21 @@ const UnifiedAnalysisEnhanced: React.FC = () => {
                 justifyContent: 'center',
               }}
             >
-              {loading ? (
-                <CircularProgress />
-              ) : (
-                <Typography sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                  No data available
-                </Typography>
-              )}
+              <Typography sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                No data available
+              </Typography>
             </Box>
           )}
         </Box>
 
         {/* VIX Analysis Widget */}
         <Box sx={{ width: 320, flexShrink: 0 }}>
-          <VIXAnalysisWidget data={epidemicData} loading={loading} />
+          {loading && !epidemicData ? (
+            // Show skeleton while VIX data is loading
+            <VIXWidgetSkeleton />
+          ) : (
+            <VIXAnalysisWidget data={epidemicData} loading={loading} />
+          )}
         </Box>
       </Box>
 

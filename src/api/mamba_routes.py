@@ -4,7 +4,7 @@ API Routes for Mamba State Space Model - Priority #3
 Mamba: Linear-Time Sequence Modeling with Selective State Spaces
 
 Key Advantages:
-- O(N) complexity vs Transformers O(N²)
+- O(N) complexity vs Transformers O(N^2)
 - 5x throughput improvement
 - Handles million-length sequences (years of tick data)
 - Selective state-space mechanisms
@@ -13,10 +13,15 @@ Perfect for:
 - High-frequency trading data
 - Very long historical sequences
 - Real-time tick-by-tick analysis
+
+Security:
+- Symbol validation prevents injection attacks
+- Sequence length capped to prevent resource exhaustion
+- Training parameters bounded for stability
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import logging
@@ -27,6 +32,20 @@ from ..ml.state_space.mamba_model import (
     MambaConfig
 )
 
+# Import validators for security-hardened input validation
+from .validators import (
+    validate_symbol,
+    validate_symbols,
+    validate_sequence_length,
+    validate_epochs,
+    sanitize_log_input,
+    MAX_SYMBOLS_PER_REQUEST,
+    MIN_SEQUENCE_LENGTH,
+    MAX_SEQUENCE_LENGTH,
+    MIN_EPOCHS,
+    MAX_EPOCHS,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -35,10 +54,39 @@ mamba_predictor: Optional[MambaPredictor] = None
 
 
 class MambaForecastRequest(BaseModel):
-    """Request for Mamba-based forecast"""
-    symbol: str
-    sequence_length: int = 1000  # Can handle very long sequences!
-    use_cache: bool = True
+    """
+    Request for Mamba-based forecast.
+
+    Security:
+    - Symbol validated to prevent injection
+    - Sequence length capped to prevent memory exhaustion
+    """
+    symbol: str = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="Stock ticker symbol (e.g., AAPL)"
+    )
+    sequence_length: int = Field(
+        default=1000,
+        ge=MIN_SEQUENCE_LENGTH,
+        le=MAX_SEQUENCE_LENGTH,
+        description=f"Historical sequence length ({MIN_SEQUENCE_LENGTH}-{MAX_SEQUENCE_LENGTH})"
+    )
+    use_cache: bool = Field(
+        default=True,
+        description="Whether to use cached data"
+    )
+
+    @field_validator('symbol')
+    @classmethod
+    def validate_symbol_field(cls, v: str) -> str:
+        return validate_symbol(v)
+
+    @field_validator('sequence_length')
+    @classmethod
+    def validate_sequence_length_field(cls, v: int) -> int:
+        return validate_sequence_length(v)
 
 
 class MambaForecastResponse(BaseModel):
@@ -53,15 +101,72 @@ class MambaForecastResponse(BaseModel):
 
 
 class MambaTrainRequest(BaseModel):
-    """Request for training Mamba model"""
-    symbols: List[str]
-    epochs: int = 50
-    sequence_length: int = 1000
+    """
+    Request for training Mamba model.
+
+    Security:
+    - Symbols validated and capped at MAX_SYMBOLS_PER_REQUEST
+    - Epochs and sequence length bounded for resource control
+    """
+    symbols: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_SYMBOLS_PER_REQUEST,
+        description=f"List of symbols (1-{MAX_SYMBOLS_PER_REQUEST})"
+    )
+    epochs: int = Field(
+        default=50,
+        ge=MIN_EPOCHS,
+        le=MAX_EPOCHS,
+        description=f"Training epochs ({MIN_EPOCHS}-{MAX_EPOCHS})"
+    )
+    sequence_length: int = Field(
+        default=1000,
+        ge=MIN_SEQUENCE_LENGTH,
+        le=MAX_SEQUENCE_LENGTH,
+        description=f"Sequence length ({MIN_SEQUENCE_LENGTH}-{MAX_SEQUENCE_LENGTH})"
+    )
+
+    @field_validator('symbols')
+    @classmethod
+    def validate_symbols_field(cls, v: List[str]) -> List[str]:
+        return validate_symbols(v)
+
+    @field_validator('epochs')
+    @classmethod
+    def validate_epochs_field(cls, v: int) -> int:
+        return validate_epochs(v)
+
+    @field_validator('sequence_length')
+    @classmethod
+    def validate_sequence_length_field(cls, v: int) -> int:
+        return validate_sequence_length(v)
 
 
 class MambaEfficiencyRequest(BaseModel):
-    """Request for efficiency comparison"""
-    sequence_lengths: List[int]
+    """
+    Request for efficiency comparison.
+
+    Security:
+    - Sequence lengths bounded to prevent memory exhaustion
+    - Maximum 10 comparison points allowed
+    """
+    sequence_lengths: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="List of sequence lengths to compare (max 10)"
+    )
+
+    @field_validator('sequence_lengths')
+    @classmethod
+    def validate_sequence_lengths_field(cls, v: List[int]) -> List[int]:
+        if len(v) > 10:
+            raise ValueError("Maximum 10 sequence lengths for comparison")
+        validated = []
+        for seq_len in v:
+            validated.append(validate_sequence_length(seq_len))
+        return validated
 
 
 async def initialize_mamba_service():
@@ -119,8 +224,23 @@ async def get_mamba_forecast(request: MambaForecastRequest):
     Can handle VERY long sequences efficiently!
     Perfect for high-frequency trading data.
     """
+    global mamba_predictor
+
+    # Lazily initialize predictor if needed
     if mamba_predictor is None:
-        raise HTTPException(status_code=503, detail="Mamba service not initialized")
+        try:
+            config = MambaConfig(
+                d_model=64,
+                d_state=16,
+                d_conv=4,
+                expand=2,
+                num_layers=4,
+                prediction_horizons=[1, 5, 10, 30]
+            )
+            mamba_predictor = MambaPredictor(symbols=[request.symbol], config=config)
+            logger.info(f"Mamba predictor initialized on-demand for {request.symbol}")
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Mamba initialization failed: {e}")
 
     try:
         # Get historical data

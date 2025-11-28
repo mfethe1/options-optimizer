@@ -17,7 +17,8 @@ import {
   Analytics,
   Warning,
   CalendarMonth,
-  Storage
+  Storage,
+  FactCheck
 } from '@mui/icons-material';
 
 interface NavItem {
@@ -41,45 +42,39 @@ const NavigationSidebar: React.FC = () => {
       description: 'All models overlay'
     },
     {
+      label: 'Truth Dashboard',
+      path: '/truth',
+      icon: <FactCheck />,
+      description: 'Model accuracy tracking'
+    },
+    {
       label: 'ML Models Info',
       icon: <Psychology />,
-      description: 'All models shown in Unified Analysis',
+      description: 'Individual model analysis',
       children: [
         {
-          label: '→ TFT (Temporal Fusion Transformer)',
-          path: '/',
-          icon: <ShowChart />,
-          description: 'Multi-horizon forecasting'
-        },
-        {
-          label: '→ Epidemic Volatility (SIR/SEIR)',
-          path: '/',
+          label: 'Epidemic Volatility',
+          path: '/ml/epidemic',
           icon: <Biotech />,
           description: 'VIX contagion modeling'
         },
         {
-          label: '→ GNN (Graph Neural Network)',
-          path: '/',
+          label: 'Graph Neural Network',
+          path: '/ml/gnn',
           icon: <AccountBalance />,
           description: 'Stock correlation networks'
         },
         {
-          label: '→ Mamba State-Space (O(N))',
-          path: '/',
+          label: 'Mamba State-Space',
+          path: '/ml/mamba',
           icon: <Speed />,
-          description: 'Linear complexity forecasting'
+          description: 'Linear O(N) forecasting'
         },
         {
-          label: '→ PINN (Physics-Informed NN)',
-          path: '/',
+          label: 'Physics-Informed NN',
+          path: '/ml/pinn',
           icon: <Science />,
-          description: 'Black-Scholes constraints'
-        },
-        {
-          label: '→ Ensemble (All Models)',
-          path: '/',
-          icon: <Assessment />,
-          description: 'Weighted consensus'
+          description: 'Black-Scholes & Greeks'
         }
       ]
     },

@@ -6,7 +6,8 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || '/api';
+// Backend URL - routes don't have /api prefix
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 // DEBUG: log selected API base URL so E2E can verify environment propagation
 console.info('[EpidemicAPI] API_BASE_URL =', API_BASE_URL);
 

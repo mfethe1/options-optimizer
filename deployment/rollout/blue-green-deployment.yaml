@@ -1,0 +1,174 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: options-api-blue-green
+  namespace: options-production
+  labels:
+    app: options-api
+    strategy: blue-green
+spec:
+  replicas: 6
+  strategy:
+    blueGreen:
+      # Blue-Green deployment for PINN fixes
+      activeService: options-api-active
+      previewService: options-api-preview
+      
+      # Automatic promotion after successful analysis
+      autoPromotionEnabled: false  # Manual approval required
+      
+      # Pre-promotion analysis
+      prePromotionAnalysis:
+        templates:
+        - templateName: pinn-comprehensive-analysis
+        args:
+        - name: service-name
+          value: options-api-preview
+        - name: prometheus-server
+          value: http://prometheus:9090
+      
+      # Post-promotion analysis
+      postPromotionAnalysis:
+        templates:
+        - templateName: pinn-post-deployment-analysis
+        args:
+        - name: service-name
+          value: options-api-active
+        - name: prometheus-server
+          value: http://prometheus:9090
+      
+      # Rollback window
+      scaleDownDelaySeconds: 300  # 5 minutes to rollback
+      previewReplicaCount: 3      # Preview with 3 replicas
+      
+      # Anti-affinity for blue-green
+      antiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values: ["options-api"]
+          topologyKey: kubernetes.io/hostname
+      
+  selector:
+    matchLabels:
+      app: options-api
+  template:
+    metadata:
+      labels:
+        app: options-api
+        version: pinn-fixes-bg
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: options-api
+        image: options-optimizer:pinn-fixes-v1.0.0
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: DEPLOYMENT_STRATEGY
+          value: "blue-green"
+        - name: PINN_LATENCY_TARGET_MS
+          value: "260"
+        - name: ENABLE_PINN_METRICS
+          value: "true"
+        - name: PINN_CACHE_SIZE
+          value: "10"
+        envFrom:
+        - configMapRef:
+            name: production-config
+        - secretRef:
+            name: production-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/pinn/quick
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        startupProbe:
+          httpGet:
+            path: /health/deployment/readiness
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 12
+        # Warmup PINN cache on startup
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                sleep 10
+                curl -X POST http://localhost:8000/health/pinn/warmup || true
+        volumeMounts:
+        - name: pinn-models
+          mountPath: /app/models
+          readOnly: true
+      volumes:
+      - name: pinn-models
+        configMap:
+          name: pinn-model-weights
+      # Pod disruption budget
+      podDisruptionBudget:
+        minAvailable: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: options-api-active
+  namespace: options-production
+  labels:
+    app: options-api
+    service: active
+spec:
+  selector:
+    app: options-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: options-api-preview
+  namespace: options-production
+  labels:
+    app: options-api
+    service: preview
+spec:
+  selector:
+    app: options-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+  type: ClusterIP

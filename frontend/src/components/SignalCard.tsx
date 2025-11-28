@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Info, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Info } from 'lucide-react';
+import { Skeleton } from '@mui/material';
 
 interface SignalCardProps {
   title: string;
@@ -32,15 +33,30 @@ export const SignalCard: React.FC<SignalCardProps> = ({
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Loading state
+  // Loading state - show skeleton instead of spinner
   if (value === null || value === undefined) {
     return (
       <div className="p-6 bg-[#1a1a1a] border border-[#404040] rounded-lg">
-        <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
-        <div className="flex flex-col items-center justify-center h-48">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-500 mb-2" />
-          <span className="text-sm text-gray-500">Computing...</span>
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between mb-4">
+          <Skeleton variant="text" width={140} height={24} sx={{ bgcolor: '#404040' }} />
+          <Skeleton variant="circular" width={20} height={20} sx={{ bgcolor: '#404040' }} />
         </div>
+        {/* Gauge placeholder skeleton (shows for all types during loading) */}
+        <div className="flex justify-center mb-4">
+          <Skeleton variant="circular" width={120} height={60} sx={{ bgcolor: '#404040' }} />
+        </div>
+        {/* Value skeleton */}
+        <Skeleton variant="text" width={80} height={36} sx={{ bgcolor: '#404040' }} />
+        {/* Interpretation skeleton */}
+        <div className="flex items-center gap-1 mt-1">
+          <Skeleton variant="circular" width={16} height={16} sx={{ bgcolor: '#404040' }} />
+          <Skeleton variant="text" width={100} height={20} sx={{ bgcolor: '#404040' }} />
+        </div>
+        {/* Progress bar skeleton */}
+        <Skeleton variant="rectangular" width="100%" height={8} sx={{ bgcolor: '#404040', borderRadius: 1, mt: 2 }} />
+        {/* Tooltip box skeleton */}
+        <Skeleton variant="rounded" width="100%" height={40} sx={{ bgcolor: '#404040', mt: 2 }} />
       </div>
     );
   }

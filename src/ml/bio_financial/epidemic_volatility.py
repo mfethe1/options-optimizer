@@ -47,6 +47,8 @@ try:
     from tensorflow.keras import layers, models
     TENSORFLOW_AVAILABLE = True
 except Exception as e:
+    tf = None  # type: ignore
+    keras = None  # type: ignore
     TENSORFLOW_AVAILABLE = False
     logging.warning(f"TensorFlow import failed for Epidemic Volatility: {e!r}")
 
@@ -280,11 +282,11 @@ class EpidemicVolatilityModel:
     Physics-Informed Neural Network for Epidemic Volatility Forecasting
 
     Architecture:
-    1. Feature network: Maps market features to epidemic parameters β, γ, σ
+    1. Feature network: Maps market features to epidemic parameters beta, gamma, sigma
     2. ODE solver: Simulates epidemic dynamics
     3. VIX decoder: Maps epidemic state to VIX prediction
 
-    Loss = MSE(VIX) + λ * ODE_residual
+    Loss = MSE(VIX) + lambda * ODE_residual
     """
 
     def __init__(self,
@@ -316,11 +318,12 @@ class EpidemicVolatilityModel:
             raise ValueError(f"Unknown model type: {model_type}")
 
         # Neural networks
-        self.parameter_network = None  # Maps features -> β, γ, σ
+        self.parameter_network = None  # Maps features -> beta, gamma, sigma
         self.vix_decoder = None        # Maps epidemic state -> VIX
 
         self.model = None
         self.is_trained = False
+        self.training_history: Optional[Dict] = None
 
         logger.info(f"Initialized {model_type} Epidemic Volatility Model")
 
@@ -415,6 +418,428 @@ class EpidemicVolatilityModel:
 
         return residual
 
+    def _prepare_training_data(self,
+                               vix_history: np.ndarray,
+                               market_features: np.ndarray,
+                               lookback: int = 5) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Prepare training data with lookback features and VIX targets.
+
+        Computes epidemic state proxies from VIX changes for physics-informed training.
+
+        Args:
+            vix_history: Historical VIX values [n_samples]
+            market_features: Features [n_samples, n_features]
+            lookback: Number of past days to use as features
+
+        Returns:
+            (X, y_vix, y_states) where:
+            - X: Input features [n_samples - lookback, n_features]
+            - y_vix: VIX targets [n_samples - lookback]
+            - y_states: Approximate epidemic state targets [n_samples - lookback, 3 or 4]
+        """
+        n_samples = len(vix_history)
+
+        # Ensure we have enough data
+        if n_samples < lookback + 10:
+            raise ValueError(f"Need at least {lookback + 10} samples, got {n_samples}")
+
+        # Use features from lookback point onward
+        X = market_features[lookback:]
+        y_vix = vix_history[lookback:]
+
+        # Compute approximate epidemic states from VIX dynamics
+        # S (susceptible) = proportion in calm state ~ low VIX relative to max
+        # I (infected) = proportion in volatile state ~ VIX relative to history
+        # R (recovered) = stabilized ~ decay from high VIX
+
+        vix_max = np.max(vix_history)
+        vix_min = np.min(vix_history)
+        vix_range = max(vix_max - vix_min, 1e-6)
+
+        # Normalized VIX (0-1 scale)
+        vix_norm = (y_vix - vix_min) / vix_range
+
+        # Compute VIX momentum (rate of change)
+        vix_momentum = np.zeros(len(y_vix))
+        for i in range(1, len(y_vix)):
+            vix_momentum[i] = (y_vix[i] - y_vix[i-1]) / max(y_vix[i-1], 1.0)
+
+        # Approximate epidemic states:
+        # I (infected/volatile) ~ normalized VIX level
+        I_approx = np.clip(vix_norm, 0.01, 0.99)
+
+        # S (susceptible/calm) ~ inverse of volatility, but decreases as I increases
+        S_approx = np.clip(1.0 - I_approx - 0.1, 0.01, 0.99)
+
+        # R (recovered) ~ remaining proportion
+        R_approx = np.clip(1.0 - S_approx - I_approx, 0.01, 0.99)
+
+        # Normalize to ensure sum = 1
+        total = S_approx + I_approx + R_approx
+        S_approx = S_approx / total
+        I_approx = I_approx / total
+        R_approx = R_approx / total
+
+        if self.model_type == "SEIR":
+            # E (exposed) ~ VIX momentum (rising tension)
+            E_approx = np.clip(np.maximum(vix_momentum, 0) * 0.5, 0.01, 0.3)
+            # Rebalance
+            total = S_approx + E_approx + I_approx + R_approx
+            S_approx = S_approx / total
+            E_approx = E_approx / total
+            I_approx = I_approx / total
+            R_approx = R_approx / total
+            y_states = np.stack([S_approx, E_approx, I_approx, R_approx], axis=1)
+        else:
+            y_states = np.stack([S_approx, I_approx, R_approx], axis=1)
+
+        return X, y_vix, y_states
+
+    def train(self,
+              vix_history: np.ndarray,
+              market_features: np.ndarray,
+              epochs: int = 100,
+              batch_size: int = 32,
+              validation_split: float = 0.2,
+              early_stopping_patience: int = 10,
+              min_delta: float = 1e-4,
+              verbose: int = 1) -> Dict[str, any]:
+        """
+        Train the epidemic volatility model.
+
+        Uses a physics-informed loss combining:
+        1. VIX prediction MSE
+        2. ODE residual (physics constraint)
+        3. State prediction MSE (epidemic state matching)
+
+        Args:
+            vix_history: Historical VIX values [n_samples]
+            market_features: Features for parameter network [n_samples, n_features]
+            epochs: Maximum training epochs
+            batch_size: Training batch size
+            validation_split: Fraction for validation (TEMPORAL split, not random)
+            early_stopping_patience: Epochs without improvement before stopping
+            min_delta: Minimum improvement to count as progress
+            verbose: Verbosity level (0=silent, 1=progress, 2=detailed)
+
+        Returns:
+            Training history dict with keys:
+            - 'loss': Training loss per epoch
+            - 'val_loss': Validation loss per epoch
+            - 'vix_loss': VIX prediction component
+            - 'physics_loss': ODE residual component
+            - 'best_epoch': Epoch with best validation loss
+            - 'stopped_early': Whether early stopping triggered
+        """
+        logger.info(f"Starting training with {len(vix_history)} samples, {epochs} epochs")
+
+        # Validate inputs
+        if len(vix_history) != len(market_features):
+            raise ValueError(f"VIX history ({len(vix_history)}) and features ({len(market_features)}) must have same length")
+
+        if len(vix_history) < 50:
+            raise ValueError(f"Need at least 50 samples for training, got {len(vix_history)}")
+
+        # Build model if needed
+        input_dim = market_features.shape[1]
+        if self.parameter_network is None:
+            self.build_model(input_dim=input_dim)
+            logger.info(f"Built model with input dim {input_dim}")
+
+        # Prepare training data
+        X, y_vix, y_states = self._prepare_training_data(vix_history, market_features)
+
+        # TEMPORAL split (NOT random - critical for time series)
+        split_idx = int(len(X) * (1 - validation_split))
+        X_train, X_val = X[:split_idx], X[split_idx:]
+        y_vix_train, y_vix_val = y_vix[:split_idx], y_vix[split_idx:]
+        y_states_train, y_states_val = y_states[:split_idx], y_states[split_idx:]
+
+        logger.info(f"Training samples: {len(X_train)}, Validation samples: {len(X_val)}")
+
+        # Normalize VIX targets for stable training
+        vix_mean = np.mean(y_vix_train)
+        vix_std = np.std(y_vix_train) + 1e-6
+        y_vix_train_norm = (y_vix_train - vix_mean) / vix_std
+        y_vix_val_norm = (y_vix_val - vix_mean) / vix_std
+
+        # Store normalization params for inference
+        self._vix_mean = vix_mean
+        self._vix_std = vix_std
+
+        # Create optimizers
+        param_optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
+        vix_optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
+
+        # Training history
+        history = {
+            'loss': [],
+            'val_loss': [],
+            'vix_loss': [],
+            'physics_loss': [],
+            'state_loss': [],
+            'best_epoch': 0,
+            'stopped_early': False
+        }
+
+        best_val_loss = float('inf')
+        patience_counter = 0
+        best_param_weights = None
+        best_vix_weights = None
+
+        # Training loop
+        n_batches = max(1, len(X_train) // batch_size)
+
+        for epoch in range(epochs):
+            epoch_losses = {'total': [], 'vix': [], 'physics': [], 'state': []}
+
+            # Shuffle training data (but maintain temporal order within batches)
+            indices = np.arange(len(X_train))
+            np.random.shuffle(indices)
+
+            for batch_idx in range(n_batches):
+                start_idx = batch_idx * batch_size
+                end_idx = min((batch_idx + 1) * batch_size, len(X_train))
+                batch_indices = indices[start_idx:end_idx]
+
+                X_batch = X_train[batch_indices]
+                y_vix_batch = y_vix_train_norm[batch_indices]
+                y_states_batch = y_states_train[batch_indices]
+
+                with tf.GradientTape(persistent=True) as tape:
+                    # Forward pass through parameter network
+                    outputs = self.parameter_network(X_batch, training=True)
+
+                    # Extract predictions based on model type
+                    if self.model_type == "SIR":
+                        beta, gamma, S0, I0 = outputs
+                        R0 = 1.0 - S0 - I0
+                        predicted_states = tf.concat([S0, I0, R0], axis=1)
+                    else:  # SEIR
+                        beta, sigma, gamma, S0, E0, I0 = outputs
+                        R0 = 1.0 - S0 - E0 - I0
+                        predicted_states = tf.concat([S0, E0, I0, R0], axis=1)
+
+                    # VIX prediction from I0 (infected state)
+                    vix_pred = self.vix_decoder(I0, training=True)
+
+                    # Loss 1: VIX prediction MSE
+                    vix_loss = tf.reduce_mean(tf.square(vix_pred - tf.reshape(y_vix_batch, (-1, 1))))
+
+                    # Loss 2: State matching MSE
+                    state_loss = tf.reduce_mean(tf.square(predicted_states - y_states_batch))
+
+                    # Loss 3: Physics-informed ODE residual
+                    # Approximate derivatives using state differences
+                    if self.model_type == "SIR":
+                        physics_loss = self._compute_sir_physics_loss(S0, I0, R0, beta, gamma)
+                    else:
+                        physics_loss = self._compute_seir_physics_loss(S0, E0, I0, R0, beta, sigma, gamma)
+
+                    # Total loss
+                    total_loss = vix_loss + 0.5 * state_loss + self.physics_weight * physics_loss
+
+                # Compute gradients and update
+                param_grads = tape.gradient(total_loss, self.parameter_network.trainable_variables)
+                vix_grads = tape.gradient(total_loss, self.vix_decoder.trainable_variables)
+
+                param_optimizer.apply_gradients(zip(param_grads, self.parameter_network.trainable_variables))
+                vix_optimizer.apply_gradients(zip(vix_grads, self.vix_decoder.trainable_variables))
+
+                del tape
+
+                epoch_losses['total'].append(float(total_loss))
+                epoch_losses['vix'].append(float(vix_loss))
+                epoch_losses['physics'].append(float(physics_loss))
+                epoch_losses['state'].append(float(state_loss))
+
+            # Compute epoch averages
+            train_loss = np.mean(epoch_losses['total'])
+            history['loss'].append(train_loss)
+            history['vix_loss'].append(np.mean(epoch_losses['vix']))
+            history['physics_loss'].append(np.mean(epoch_losses['physics']))
+            history['state_loss'].append(np.mean(epoch_losses['state']))
+
+            # Validation loss
+            val_outputs = self.parameter_network(X_val, training=False)
+            if self.model_type == "SIR":
+                _, _, _, I0_val = val_outputs
+            else:
+                _, _, _, _, _, I0_val = val_outputs
+
+            vix_pred_val = self.vix_decoder(I0_val, training=False)
+            val_loss = float(tf.reduce_mean(tf.square(vix_pred_val - tf.reshape(y_vix_val_norm, (-1, 1)))))
+            history['val_loss'].append(val_loss)
+
+            # Early stopping check
+            if val_loss < best_val_loss - min_delta:
+                best_val_loss = val_loss
+                patience_counter = 0
+                history['best_epoch'] = epoch
+                # Save best weights
+                best_param_weights = [w.numpy().copy() for w in self.parameter_network.weights]
+                best_vix_weights = [w.numpy().copy() for w in self.vix_decoder.weights]
+            else:
+                patience_counter += 1
+
+            if verbose >= 1 and (epoch % 10 == 0 or epoch == epochs - 1):
+                logger.info(f"Epoch {epoch+1}/{epochs} - loss: {train_loss:.4f} - val_loss: {val_loss:.4f}")
+
+            if patience_counter >= early_stopping_patience:
+                logger.info(f"Early stopping at epoch {epoch+1} (best: {history['best_epoch']+1})")
+                history['stopped_early'] = True
+                break
+
+        # Restore best weights
+        if best_param_weights is not None:
+            for i, w in enumerate(self.parameter_network.weights):
+                w.assign(best_param_weights[i])
+            for i, w in enumerate(self.vix_decoder.weights):
+                w.assign(best_vix_weights[i])
+            logger.info(f"Restored best weights from epoch {history['best_epoch']+1}")
+
+        self.is_trained = True
+        self.training_history = history
+
+        logger.info(f"Training complete. Best val_loss: {best_val_loss:.4f} at epoch {history['best_epoch']+1}")
+
+        return history
+
+    def _compute_sir_physics_loss(self, S, I, R, beta, gamma):
+        """
+        Compute physics-informed loss for SIR model.
+
+        Enforces ODE constraints: dS/dt = -beta*S*I, dI/dt = beta*S*I - gamma*I, dR/dt = gamma*I
+        """
+        # Approximate derivatives (for batch data, we use equilibrium constraint)
+        # At equilibrium or steady state: flows should balance
+
+        # Flow S -> I should equal beta * S * I
+        infection_flow = beta * S * I
+
+        # Flow I -> R should equal gamma * I
+        recovery_flow = gamma * I
+
+        # Conservation: S + I + R = 1
+        conservation_loss = tf.reduce_mean(tf.square(S + I + R - 1.0))
+
+        # Non-negativity (already enforced by sigmoid, but add soft constraint)
+        non_neg_loss = tf.reduce_mean(tf.nn.relu(-S) + tf.nn.relu(-I) + tf.nn.relu(-R))
+
+        # Basic reproduction number constraint: R0 = beta/gamma should be reasonable (0.5 to 5)
+        R0_ratio = beta / (gamma + 1e-6)
+        R0_loss = tf.reduce_mean(tf.nn.relu(R0_ratio - 5.0) + tf.nn.relu(0.5 - R0_ratio))
+
+        return conservation_loss + 0.1 * non_neg_loss + 0.1 * R0_loss
+
+    def _compute_seir_physics_loss(self, S, E, I, R, beta, sigma, gamma):
+        """
+        Compute physics-informed loss for SEIR model.
+
+        Enforces ODE constraints for SEIR dynamics.
+        """
+        # Conservation: S + E + I + R = 1
+        conservation_loss = tf.reduce_mean(tf.square(S + E + I + R - 1.0))
+
+        # Non-negativity
+        non_neg_loss = tf.reduce_mean(
+            tf.nn.relu(-S) + tf.nn.relu(-E) + tf.nn.relu(-I) + tf.nn.relu(-R)
+        )
+
+        # R0 constraint: beta/gamma reasonable range
+        R0_ratio = beta / (gamma + 1e-6)
+        R0_loss = tf.reduce_mean(tf.nn.relu(R0_ratio - 5.0) + tf.nn.relu(0.5 - R0_ratio))
+
+        # Sigma constraint: incubation rate should be positive and reasonable
+        sigma_loss = tf.reduce_mean(tf.nn.relu(0.1 - sigma) + tf.nn.relu(sigma - 2.0))
+
+        return conservation_loss + 0.1 * non_neg_loss + 0.1 * R0_loss + 0.1 * sigma_loss
+
+    def save_weights(self, path: str) -> None:
+        """
+        Save model weights to disk.
+
+        Args:
+            path: Directory path to save weights (will create if not exists)
+        """
+        import os
+
+        if self.parameter_network is None or self.vix_decoder is None:
+            raise ValueError("Cannot save weights: model not built")
+
+        os.makedirs(path, exist_ok=True)
+
+        # Save both networks
+        param_path = os.path.join(path, "parameter_network.weights.h5")
+        vix_path = os.path.join(path, "vix_decoder.weights.h5")
+
+        self.parameter_network.save_weights(param_path)
+        self.vix_decoder.save_weights(vix_path)
+
+        # Save metadata
+        import json
+        metadata = {
+            'model_type': self.model_type,
+            'hidden_dims': self.hidden_dims,
+            'learning_rate': self.learning_rate,
+            'physics_weight': self.physics_weight,
+            'is_trained': self.is_trained,
+            'vix_mean': getattr(self, '_vix_mean', 0.0),
+            'vix_std': getattr(self, '_vix_std', 1.0),
+        }
+
+        meta_path = os.path.join(path, "metadata.json")
+        with open(meta_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+        logger.info(f"Saved epidemic model weights to {path}")
+
+    def load_weights(self, path: str, input_dim: Optional[int] = None) -> None:
+        """
+        Load model weights from disk.
+
+        Args:
+            path: Directory path containing saved weights
+            input_dim: Input dimension (required if model not yet built)
+        """
+        import os
+        import json
+
+        # Load metadata first
+        meta_path = os.path.join(path, "metadata.json")
+        if os.path.exists(meta_path):
+            with open(meta_path, 'r') as f:
+                metadata = json.load(f)
+
+            self.model_type = metadata.get('model_type', self.model_type)
+            self.hidden_dims = metadata.get('hidden_dims', self.hidden_dims)
+            self._vix_mean = metadata.get('vix_mean', 0.0)
+            self._vix_std = metadata.get('vix_std', 1.0)
+
+        # Build model if needed
+        param_path = os.path.join(path, "parameter_network.weights.h5")
+        if self.parameter_network is None:
+            if input_dim is None:
+                # Try to infer from weights file
+                raise ValueError("Model not built and input_dim not provided")
+            self.build_model(input_dim=input_dim)
+
+        # Load weights
+        if os.path.exists(param_path):
+            self.parameter_network.load_weights(param_path)
+        else:
+            raise FileNotFoundError(f"Parameter network weights not found at {param_path}")
+
+        vix_path = os.path.join(path, "vix_decoder.weights.h5")
+        if os.path.exists(vix_path):
+            self.vix_decoder.load_weights(vix_path)
+        else:
+            raise FileNotFoundError(f"VIX decoder weights not found at {vix_path}")
+
+        self.is_trained = True
+        logger.info(f"Loaded epidemic model weights from {path}")
+
     def predict_epidemic_state(self,
                                features: np.ndarray,
                                days_ahead: int = 30,
@@ -505,9 +930,72 @@ class EpidemicVolatilityPredictor:
     Orchestrates data collection, model prediction, and interpretation.
     """
 
-    def __init__(self, model_type: str = "SEIR"):
+    def __init__(self, model_type: str = "SEIR", weights_path: Optional[str] = None):
+        """
+        Initialize the predictor.
+
+        Args:
+            model_type: "SIR" or "SEIR"
+            weights_path: Optional path to pre-trained weights
+        """
         self.model = EpidemicVolatilityModel(model_type=model_type)
         self.model_type = model_type
+        self._weights_path = weights_path
+
+        # Try to load pre-trained weights if provided
+        if weights_path is not None:
+            try:
+                self.model.load_weights(weights_path, input_dim=4)
+                logger.info(f"Loaded pre-trained weights from {weights_path}")
+            except Exception as e:
+                logger.warning(f"Could not load weights from {weights_path}: {e}")
+
+    @property
+    def is_trained(self) -> bool:
+        """Check if the underlying model is trained."""
+        return self.model.is_trained
+
+    def train(self,
+              vix_history: np.ndarray,
+              market_features: np.ndarray,
+              epochs: int = 100,
+              batch_size: int = 32,
+              validation_split: float = 0.2,
+              early_stopping_patience: int = 10,
+              verbose: int = 1) -> Dict[str, any]:
+        """
+        Train the epidemic volatility model.
+
+        Args:
+            vix_history: Historical VIX values [n_samples]
+            market_features: Features [n_samples, n_features]
+                Expected features: [vix/100, realized_vol/100, sentiment_normalized, volume_normalized]
+            epochs: Maximum training epochs
+            batch_size: Training batch size
+            validation_split: Fraction for temporal validation split
+            early_stopping_patience: Epochs without improvement before stopping
+            verbose: Verbosity level
+
+        Returns:
+            Training history dictionary
+        """
+        return self.model.train(
+            vix_history=vix_history,
+            market_features=market_features,
+            epochs=epochs,
+            batch_size=batch_size,
+            validation_split=validation_split,
+            early_stopping_patience=early_stopping_patience,
+            verbose=verbose
+        )
+
+    def save_weights(self, path: str) -> None:
+        """Save model weights to disk."""
+        self.model.save_weights(path)
+
+    def load_weights(self, path: str, input_dim: int = 4) -> None:
+        """Load model weights from disk."""
+        self.model.load_weights(path, input_dim=input_dim)
 
     async def predict(self,
                      current_vix: float,

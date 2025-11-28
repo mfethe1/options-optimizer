@@ -1,0 +1,162 @@
+# Prometheus Alerting Rules for PINN Service
+# Deploy to: /etc/prometheus/rules/pinn_alerts.yml
+
+groups:
+- name: pinn_service_critical
+  interval: 30s
+  rules:
+  - alert: PINNErrorRateCritical
+    expr: |
+      (
+        sum(rate(pinn_prediction_errors_total[5m]))
+        /
+        sum(rate(pinn_prediction_latency_seconds_count[5m]))
+      ) > 0.10
+    for: 5m
+    labels:
+      severity: critical
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN error rate exceeds 10% (CRITICAL)"
+      description: "Error rate: {{ $value | humanizePercentage }} over last 5 minutes. Investigate immediately!"
+      runbook: "https://wiki.company.com/pinn-error-rate-runbook"
+      dashboard: "https://grafana.company.com/d/pinn-overview"
+
+  - alert: PINNMemoryLeakCritical
+    expr: |
+      rate(container_memory_usage_bytes{pod=~"pinn-service.*"}[1h]) > 10485760
+    for: 1h
+    labels:
+      severity: critical
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN service memory leak detected (>10MB/hour)"
+      description: "Memory growth rate: {{ $value | humanize }}B/hour. Check for tape cleanup (P1-3 fix)."
+      runbook: "https://wiki.company.com/pinn-memory-leak-runbook"
+
+  - alert: PINNServiceDown
+    expr: up{job="pinn-service"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN service is down"
+      description: "PINN service has been unavailable for >2 minutes."
+
+- name: pinn_service_warning
+  interval: 30s
+  rules:
+  - alert: PINNCacheHitRateLow
+    expr: |
+      (
+        sum(rate(pinn_cache_hits_total[5m]))
+        /
+        (sum(rate(pinn_cache_hits_total[5m])) + sum(rate(pinn_cache_misses_total[5m])))
+      ) < 0.70
+    for: 10m
+    labels:
+      severity: warning
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN cache hit rate below 70%"
+      description: "Current hit rate: {{ $value | humanizePercentage }}. Expected: >80%. Check cache warmup and parameter distribution."
+      runbook: "https://wiki.company.com/pinn-cache-hit-rate-runbook"
+
+  - alert: PINNLatencyP95High
+    expr: |
+      histogram_quantile(0.95,
+        sum(rate(pinn_prediction_latency_seconds_bucket[5m])) by (le, method)
+      ) > 2.0
+    for: 5m
+    labels:
+      severity: warning
+      component: pinn
+      team: ml-platform
+      method: "{{ $labels.method }}"
+    annotations:
+      summary: "PINN p95 latency exceeds 2 seconds"
+      description: "Method: {{ $labels.method }}, p95 latency: {{ $value | humanizeDuration }}. Target: <500ms."
+
+  - alert: PINNFallbackRateHigh
+    expr: |
+      (
+        sum(rate(pinn_fallback_total[5m]))
+        /
+        sum(rate(pinn_prediction_latency_seconds_count[5m]))
+      ) > 0.20
+    for: 10m
+    labels:
+      severity: warning
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN fallback rate exceeds 20%"
+      description: "Fallback rate: {{ $value | humanizePercentage }}. Check model weights and TensorFlow availability."
+
+  - alert: PINNCacheSizeMax
+    expr: pinn_cache_size >= 10
+    for: 30m
+    labels:
+      severity: info
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN cache at maximum size (10 models)"
+      description: "Cache has been at max size for 30 minutes. Consider increasing maxsize if hit rate <80%."
+
+  - alert: PINNLatencyP99High
+    expr: |
+      histogram_quantile(0.99,
+        sum(rate(pinn_prediction_latency_seconds_bucket[5m])) by (le)
+      ) > 5.0
+    for: 10m
+    labels:
+      severity: warning
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN p99 latency exceeds 5 seconds"
+      description: "p99 latency: {{ $value | humanizeDuration }}. May indicate occasional severe slowdowns."
+
+- name: pinn_service_performance
+  interval: 1m
+  rules:
+  - alert: PINNCacheEvictionRateHigh
+    expr: rate(pinn_cache_misses_total[5m]) > 10
+    for: 15m
+    labels:
+      severity: info
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "High PINN cache miss rate"
+      description: "Cache misses: {{ $value | humanize }} per second. Review parameter distribution."
+
+  - alert: PINNGPUFallbackFrequent
+    expr: |
+      sum(rate(pinn_fallback_total{reason=~"gpu_.*"}[5m])) > 1
+    for: 10m
+    labels:
+      severity: warning
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "Frequent GPU-related PINN fallbacks"
+      description: "GPU fallback rate: {{ $value | humanize }} per second. Check GPU availability."
+
+  - alert: PINNNumericalInstabilityDetected
+    expr: |
+      sum(rate(pinn_prediction_errors_total{error_type="NumericalInstabilityError"}[5m])) > 0.1
+    for: 5m
+    labels:
+      severity: warning
+      component: pinn
+      team: ml-platform
+    annotations:
+      summary: "PINN numerical instability errors detected"
+      description: "NaN/Inf errors: {{ $value | humanize }} per second. Check model training quality."
